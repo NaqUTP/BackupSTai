@@ -92,10 +92,11 @@ html, body, [data-testid="stAppViewContainer"] * {{
 }}
 [data-testid="stSidebar"] * {{ color: #fff !important; }}
 
-/* ========================= FIXED SIDEBAR CHEVRON TOGGLE ========================= */
+/* ========================= FIXED SIDEBAR CHEVRON TOGGLE (TEXT-SAFE) ========================= */
 
-/* Target the NEW Streamlit toggle element */
+/* Target the sidebar toggle button (new Streamlit builds) */
 button[title="Toggle sidebar"],
+button[aria-label="Toggle sidebar"],
 button[data-testid="baseButton-toggleSidebar"] {{
     position: fixed !important;
     top: 50% !important;
@@ -106,7 +107,7 @@ button[data-testid="baseButton-toggleSidebar"] {{
     height: 46px !important;
     border-radius: 50% !important;
 
-    background: linear-gradient(145deg, {PETRONAS["teal"]}, {PETRONAS["purple"]}) !important;
+    background: linear-gradient(145deg, rgba(0,161,155,0.95), rgba(108,77,211,0.9)) !important;
     border: 1px solid rgba(255,255,255,0.25) !important;
 
     display: flex !important;
@@ -120,31 +121,46 @@ button[data-testid="baseButton-toggleSidebar"] {{
     transition: all 0.25s ease-in-out;
 }}
 
-/* Remove Streamlit default arrow icon (keyboard_arrow_right/left) */
+/* Hide ANY built-in text/icon such as 'keyboard_double_arrow_right' */
+button[title="Toggle sidebar"] *,
+button[aria-label="Toggle sidebar"] *,
+button[data-testid="baseButton-toggleSidebar"] * {{
+    font-size: 0 !important;
+    color: transparent !important;
+    text-indent: -9999px !important;
+    line-height: 0 !important;
+    overflow: hidden !important;
+}}
+
+/* Hide SVG icons (old Streamlit versions) */
 button[title="Toggle sidebar"] svg,
+button[aria-label="Toggle sidebar"] svg,
 button[data-testid="baseButton-toggleSidebar"] svg {{
     display: none !important;
 }}
 
-/* Add custom chevron */
+/* Our custom chevron icon */
 button[title="Toggle sidebar"]::after,
+button[aria-label="Toggle sidebar"]::after,
 button[data-testid="baseButton-toggleSidebar"]::after {{
     content: "⟪";
-    font-size: 20px;
-    color: white;
-    font-weight: bold;
+    font-size: 20px !important;
+    color: #fff !important;
+    font-weight: bold !important;
     text-shadow: 0 0 8px rgba(0,0,0,0.5);
     transition: transform 0.25s ease-in-out;
 }}
 
-/* When sidebar is collapsed → arrow flips */
+/* When sidebar is collapsed → flip arrow */
 button[title="Toggle sidebar"][aria-expanded="false"]::after,
+button[aria-label="Toggle sidebar"][aria-expanded="false"]::after,
 button[data-testid="baseButton-toggleSidebar"][aria-expanded="false"]::after {{
     content: "⟫";
 }}
 
 /* Hover effect */
 button[title="Toggle sidebar"]:hover,
+button[aria-label="Toggle sidebar"]:hover,
 button[data-testid="baseButton-toggleSidebar"]:hover {{
     transform: translateY(-50%) scale(1.1);
     box-shadow: 0 0 18px rgba(108,77,211,0.8);
@@ -467,7 +483,7 @@ def create_project_pptx_report_abex(project_name, proj, currency=""):
     # Title slide
     slide = prs.slides.add_slide(prs.slide_layouts[5])
     title = slide.shapes.title
-    title.text = f"ABEX Project Report\\n{project_name}"
+    title.text = f"ABEX Project Report\n{project_name}"
     p = title.text_frame.paragraphs[0]
     p.alignment = PP_ALIGN.LEFT
     p.font.size = Pt(32)
@@ -502,7 +518,7 @@ def create_project_pptx_report_abex(project_name, proj, currency=""):
             f" • {c['component_type']}: {currency} {c['breakdown']['grand_total']:,.2f}"
         )
 
-    tf.text = "\\n".join(lines)
+    tf.text = "\n".join(lines)
     for para in tf.paragraphs:
         para.font.size = Pt(16)
 
