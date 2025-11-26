@@ -92,9 +92,10 @@ html, body, [data-testid="stAppViewContainer"] * {{
 }}
 [data-testid="stSidebar"] * {{ color: #fff !important; }}
 
-/* ========================= FIXED SIDEBAR CHEVRON TOGGLE (TEXT-SAFE) ========================= */
+/* ========================= FIXED SIDEBAR CHEVRON TOGGLE (TEXT-SAFE, ALL VERSIONS) ========================= */
 
-/* Target the sidebar toggle button (new Streamlit builds) */
+/* Base target elements: old & new Streamlit */
+[data-testid="collapsedControl"],
 button[title="Toggle sidebar"],
 button[aria-label="Toggle sidebar"],
 button[data-testid="baseButton-toggleSidebar"] {{
@@ -121,7 +122,22 @@ button[data-testid="baseButton-toggleSidebar"] {{
     transition: all 0.25s ease-in-out;
 }}
 
-/* Hide ANY built-in text/icon such as 'keyboard_double_arrow_right' */
+/* Hide ANY built-in text/icon such as 'keyboard_double_arrow_right/down' */
+
+/* On the elements themselves (this hides the raw text node) */
+[data-testid="collapsedControl"],
+button[title="Toggle sidebar"],
+button[aria-label="Toggle sidebar"],
+button[data-testid="baseButton-toggleSidebar"] {{
+    font-size: 0 !important;
+    color: transparent !important;
+    text-indent: -9999px !important;
+    line-height: 0 !important;
+    overflow: hidden !important;
+}}
+
+/* And all children (spans, icons, etc.) */
+[data-testid="collapsedControl"] *,
 button[title="Toggle sidebar"] *,
 button[aria-label="Toggle sidebar"] *,
 button[data-testid="baseButton-toggleSidebar"] * {{
@@ -132,7 +148,8 @@ button[data-testid="baseButton-toggleSidebar"] * {{
     overflow: hidden !important;
 }}
 
-/* Hide SVG icons (old Streamlit versions) */
+/* Hide SVG icons just in case */
+[data-testid="collapsedControl"] svg,
 button[title="Toggle sidebar"] svg,
 button[aria-label="Toggle sidebar"] svg,
 button[data-testid="baseButton-toggleSidebar"] svg {{
@@ -140,6 +157,7 @@ button[data-testid="baseButton-toggleSidebar"] svg {{
 }}
 
 /* Our custom chevron icon */
+[data-testid="collapsedControl"]::after,
 button[title="Toggle sidebar"]::after,
 button[aria-label="Toggle sidebar"]::after,
 button[data-testid="baseButton-toggleSidebar"]::after {{
@@ -148,17 +166,20 @@ button[data-testid="baseButton-toggleSidebar"]::after {{
     color: #fff !important;
     font-weight: bold !important;
     text-shadow: 0 0 8px rgba(0,0,0,0.5);
-    transition: transform 0.25s ease-in-out;
+    text-indent: 0 !important;
+    line-height: 1.2 !important;
 }}
 
 /* When sidebar is collapsed → flip arrow */
+[data-testid="collapsedControl"][aria-expanded="false"]::after,
 button[title="Toggle sidebar"][aria-expanded="false"]::after,
 button[aria-label="Toggle sidebar"][aria-expanded="false"]::after,
 button[data-testid="baseButton-toggleSidebar"][aria-expanded="false"]::after {{
     content: "⟫";
-}}
+}
 
 /* Hover effect */
+[data-testid="collapsedControl"]:hover,
 button[title="Toggle sidebar"]:hover,
 button[aria-label="Toggle sidebar"]:hover,
 button[data-testid="baseButton-toggleSidebar"]:hover {{
