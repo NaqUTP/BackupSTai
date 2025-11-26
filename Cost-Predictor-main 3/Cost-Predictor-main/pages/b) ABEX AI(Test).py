@@ -692,7 +692,7 @@ def create_comparison_pptx_report_abex(projects_dict, currency=""):
         plt.close(fig)
         img_stream.seek(0)
 
-        slide = prs.slides.add_slide(prs.slides[5].layout)
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
         title = slide.shapes.title
         title.text = "Grand Total by Project"
         slide.shapes.add_picture(img_stream, Inches(0.7), Inches(1.5), width=Inches(8.6))
@@ -995,9 +995,9 @@ with tab_model:
                 metrics = evaluate_model(X, y, test_size=test_size)
             c1, c2 = st.columns(2)
             with c1:
-                st.metric("RMSE", f"{metrics['rmse']:,.2f}")
+                st.metric("RMSE (best)", f"{metrics['rmse']:,.2f}")
             with c2:
-                st.metric("R²", f"{metrics['r2']:.3f}")
+                st.metric("R² (best)", f"{metrics['r2']:.3f}")
 
             # cache best algorithm for this dataset
             st.session_state._last_metrics = metrics
@@ -1005,6 +1005,25 @@ with tab_model:
 
             toast("Training complete.")
             st.caption(f"Best model selected: **{metrics.get('best_model', 'RandomForest')}**")
+
+            # >>> MODEL COMPARISON TABLE (6 MODELS) <<<
+            try:
+                models_list = metrics.get("models", [])
+                if models_list:
+                    df_models = pd.DataFrame(models_list)
+                    df_models["rmse"] = df_models["rmse"].astype(float)
+                    df_models["r2"] = df_models["r2"].astype(float)
+                    df_models = df_models.set_index("model")
+                    st.markdown("##### Model comparison (6-model pool)")
+                    styled = (
+                        df_models.style
+                        .format({"rmse": "{:,.2f}", "r2": "{:.3f}"})
+                        .background_gradient(subset=["r2"], cmap="YlGn")      # greener = better R²
+                        .background_gradient(subset=["rmse"], cmap="OrRd_r")  # darker red = lower RMSE
+                    )
+                    st.dataframe(styled, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render model comparison table: {e}")
 
 # ================================== VISUALIZATION TAB =================================
 with tab_viz:
