@@ -11,10 +11,14 @@ import pandas as pd
 import streamlit as st
 
 # ML/Stats
-from sklearn.impute import KNNImputer
+from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import Ridge, Lasso
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, r2_score
 from scipy.stats import linregress
 
@@ -285,6 +289,8 @@ if "projects" not in st.session_state:
     st.session_state.projects = {}
 if "component_labels" not in st.session_state:
     st.session_state.component_labels = {}
+if "best_model_name_per_dataset" not in st.session_state:
+    st.session_state.best_model_name_per_dataset = {}
 
 # ---------------------------------------------------------------------------------------
 # HELPERS
@@ -686,7 +692,7 @@ def create_comparison_pptx_report_abex(projects_dict, currency=""):
         plt.close(fig)
         img_stream.seek(0)
 
-        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        slide = prs.slides.add_slide(prs.slides[5].layout)
         title = slide.shapes.title
         title.text = "Grand Total by Project"
         slide.shapes.add_picture(img_stream, Inches(0.7), Inches(1.5), width=Inches(8.6))
@@ -741,6 +747,16 @@ REPO_NAME   = "Cost-Predictor"
 BRANCH      = "main"
 DATA_FOLDER = "pages/data_ABEX"
 
+# ---- Automatic best model (6-model pool) -----------------------------------
+MODEL_CANDIDATES = {
+    "RandomForest":      lambda rs=42: RandomForestRegressor(random_state=rs),
+    "GradientBoosting":  lambda rs=42: GradientBoostingRegressor(random_state=rs),
+    "Ridge":             lambda rs=42: Ridge(),
+    "Lasso":             lambda rs=42: Lasso(),
+    "SVR":               lambda rs=42: SVR(),
+    "DecisionTree":      lambda rs=42: DecisionTreeRegressor(random_state=rs),
+}
+
 @st.cache_data(ttl=600)
 def list_csvs_from_manifest(folder_path: str):
     manifest_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRANCH}/{folder_path}/files.json"
@@ -752,27 +768,94 @@ def list_csvs_from_manifest(folder_path: str):
         st.error(f"Failed to load CSV manifest: {e}")
         return []
 
-def evaluate_model(X, y, test_size=0.2):
-    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=42)
-    scaler = MinMaxScaler().fit(Xtr)
-    model = RandomForestRegressor(random_state=42).fit(scaler.transform(Xtr), ytr)
-    yhat  = model.predict(scaler.transform(Xte))
-    rmse = float(np.sqrt(mean_squared_error(yte, yhat)))
-    r2   = float(r2_score(yte, yhat))
-    return dict(model=model, scaler=scaler, rmse=rmse, r2=r2)
+def evaluate_model(X, y, test_size=0.2, random_state=42):
+    """
+    Train all candidate models on a train/test split and pick the best by R².
+    Returns JSON-friendly metrics (no model objects).
+    """
+    Xtr, Xte, ytr, yte = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
 
-def single_prediction(X, y, payload: dict):
-    scaler = MinMaxScaler().fit(X)
-    model  = RandomForestRegressor(random_state=42).fit(scaler.transform(X), y)
+    rows = []
+    best_name = None
+    best_r2 = -np.inf
+    best_rmse = None
+
+    for name, ctor in MODEL_CANDIDATES.items():
+        base_model = ctor(random_state)
+        pipe = Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", MinMaxScaler()),
+                ("model", base_model),
+            ]
+        )
+        pipe.fit(Xtr, ytr)
+        yhat = pipe.predict(Xte)
+        rmse = float(np.sqrt(mean_squared_error(yte, yhat)))
+        r2 = float(r2_score(yte, yhat))
+        rows.append({"model": name, "rmse": rmse, "r2": r2})
+        if r2 > best_r2:
+            best_r2 = r2
+            best_rmse = rmse
+            best_name = name
+
+    rows_sorted = sorted(rows, key=lambda d: d["r2"], reverse=True)
+    metrics = {
+        "best_model": best_name,
+        "rmse": best_rmse,
+        "r2": best_r2,
+        "models": rows_sorted,  # list of {model, rmse, r2}
+    }
+    return metrics
+
+def get_trained_model_for_dataset(X, y, dataset_name: str, random_state=42):
+    """
+    Train a pipeline with the best algorithm (per dataset) on the FULL data.
+    - Uses stored best algorithm if available.
+    - Otherwise runs evaluate_model() once to decide, then caches the choice.
+    """
+    if "best_model_name_per_dataset" not in st.session_state:
+        st.session_state.best_model_name_per_dataset = {}
+
+    best_name = st.session_state.best_model_name_per_dataset.get(dataset_name)
+
+    if not best_name:
+        metrics = evaluate_model(X, y, test_size=0.2, random_state=random_state)
+        best_name = metrics.get("best_model", "RandomForest")
+        st.session_state.best_model_name_per_dataset[dataset_name] = best_name
+        # Keep the last metrics around for export
+        st.session_state._last_metrics = metrics
+
+    ctor = MODEL_CANDIDATES.get(best_name, MODEL_CANDIDATES["RandomForest"])
+    base_model = ctor(random_state)
+    pipe = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", MinMaxScaler()),
+            ("model", base_model),
+        ]
+    )
+    pipe.fit(X, y)
+    return pipe, best_name
+
+def single_prediction(X, y, payload: dict, dataset_name: str = "default"):
+    """
+    Single prediction using the best-model pipeline for this dataset.
+    """
+    model_pipe, _ = get_trained_model_for_dataset(X, y, dataset_name=dataset_name)
     cols = list(X.columns)
     row = {c: np.nan for c in cols}
     for c, v in payload.items():
+        if c not in row:
+            continue
         try:
             row[c] = float(v) if (v is not None and str(v).strip() != "") else np.nan
         except Exception:
             row[c] = np.nan
     df_in = pd.DataFrame([row], columns=cols)
-    pred = float(model.predict(scaler.transform(df_in))[0])
+    pred = float(model_pipe.predict(df_in)[0])
     return pred
 
 # ---------------------------------------------------------------------------------------
@@ -905,16 +988,23 @@ with tab_model:
             test_size = st.slider("Test size", 0.1, 0.5, 0.2, 0.05, help="Fraction of data used for testing")
             run = st.button("Run training")
         with c2:
-            st.caption("Random Forest on min-max scaled features; reproducible with random_state=42.")
+            st.caption("Automatic best-model selection over 6 regressors (with scaling & imputation).")
 
         if run:
             with st.spinner("Training model..."):
                 metrics = evaluate_model(X, y, test_size=test_size)
             c1, c2 = st.columns(2)
-            with c1: st.metric("RMSE", f"{metrics['rmse']:,.2f}")
-            with c2: st.metric("R²", f"{metrics['r2']:.3f}")
+            with c1:
+                st.metric("RMSE", f"{metrics['rmse']:,.2f}")
+            with c2:
+                st.metric("R²", f"{metrics['r2']:.3f}")
+
+            # cache best algorithm for this dataset
             st.session_state._last_metrics = metrics
+            st.session_state.best_model_name_per_dataset[ds_name] = metrics.get("best_model")
+
             toast("Training complete.")
+            st.caption(f"Best model selected: **{metrics.get('best_model', 'RandomForest')}**")
 
 # ================================== VISUALIZATION TAB =================================
 with tab_viz:
@@ -944,7 +1034,7 @@ with tab_viz:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
-        # Feature Importance
+        # Feature Importance (RandomForest for explainability only)
         st.markdown('<h4 style="margin:0;color:#000;">Feature Importance</h4><p>Model</p>', unsafe_allow_html=True)
         scaler = MinMaxScaler().fit(X)
         model = RandomForestRegressor(random_state=42).fit(scaler.transform(X), y)
@@ -1050,7 +1140,7 @@ with tab_predict:
                         new_data[col_name] = val
 
         if st.button("Run Prediction"):
-            pred = single_prediction(X, y, new_data)
+            pred = single_prediction(X, y, new_data, dataset_name=ds_name)
             owners_cost, sst_cost, contingency_cost, escalation_cost, eprr_costs, grand_total = cost_breakdown(
                 pred, eprr, sst_pct, owners_pct, cont_pct, esc_pct
             )
@@ -1082,9 +1172,8 @@ with tab_predict:
                 if missing:
                     st.error(f"Missing required columns in Excel: {missing}")
                 else:
-                    scaler_b = MinMaxScaler().fit(X)
-                    model_b  = RandomForestRegressor(random_state=42).fit(scaler_b.transform(X), y)
-                    preds = model_b.predict(scaler_b.transform(batch_df[X.columns]))
+                    model_pipe, best_name = get_trained_model_for_dataset(X, y, dataset_name=ds_name)
+                    preds = model_pipe.predict(batch_df[X.columns])
                     batch_df[target_column] = preds
 
                     for i, row in batch_df.iterrows():
@@ -1255,14 +1344,14 @@ with tab_pb:
                         except Exception:
                             row_payload[f] = np.nan
                 try:
-                    base_pred = single_prediction(X_comp, y_comp, row_payload)
+                    base_pred = single_prediction(X_comp, y_comp, row_payload, dataset_name=dataset_for_comp)
                     owners_cost, sst_cost, contingency_cost, escalation_cost, eprr_costs, grand_total = cost_breakdown(
                         base_pred, eprr_pb, sst_pb, owners_pb, cont_pb, esc_pb
                     )
                     comp_entry = {
                         "component_type": component_type or default_label or "Component",
                         "dataset": dataset_for_comp,
-                        "model_used": "RandomForest (ABEX)",
+                        "model_used": st.session_state.best_model_name_per_dataset.get(dataset_for_comp, "BestModel"),
                         "inputs": {k: row_payload[k] for k in feat_cols},
                         "prediction": base_pred,
                         "breakdown": {
@@ -1497,7 +1586,7 @@ with tab_compare:
                 margin=dict(l=0, r=0, t=10, b=0),
                 paper_bgcolor=PETRONAS["white"], plot_bgcolor=PETRONAS["white"],
                 font=dict(color=PETRONAS["black"]),
-                xaxis=dict(color=PETRONAS["black"], tickangle=25),
+                xaxis=dict(color=PETRONAS["black"]),
                 yaxis=dict(color=PETRONAS["black"])
             )
             st.plotly_chart(fig_comp, use_container_width=True)
@@ -1555,4 +1644,11 @@ with tab_compare:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-           
+            with col_c2:
+                pptx_comp = create_comparison_pptx_report_abex(projects_to_export, currency_comp)
+                st.download_button(
+                    "⬇️ Download Comparison PowerPoint",
+                    data=pptx_comp,
+                    file_name="ABEX_Projects_Comparison.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                )
