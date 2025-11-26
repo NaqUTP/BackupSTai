@@ -1,8 +1,6 @@
-# ======================= ABEX AI — PETRONAS Gradient UI (Full App, Part 1) =======================
-# - Chevron fully fixed (⟪ ⟫)
-# - 6 SharePoint placeholder buttons (Shallow Water, Deep Water, Onshore, Unconventional, CCS)
-# - No underline on link-buttons
-# - Full CSS clean + stable
+# ======================= ABEX AI — PETRONAS Gradient UI (Full App, with Project Builder + Exports) =======================
+# - Data • Model • Visualization • Predict • Results • Project Builder • Compare Projects
+# - Excel/PPT export with charts, heatmaps, and lines for projects & comparisons
 
 import io
 import json
@@ -13,10 +11,14 @@ import pandas as pd
 import streamlit as st
 
 # ML/Stats
-from sklearn.impute import KNNImputer
+from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import Ridge, Lasso
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, r2_score
 from scipy.stats import linregress
 
@@ -38,7 +40,6 @@ from pptx.dml.color import RGBColor
 from openpyxl.formatting.rule import ColorScaleRule
 from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.utils import get_column_letter
-
 
 # ---------------------------------------------------------------------------------------
 # PAGE CONFIG
@@ -63,13 +64,27 @@ PETRONAS = {
 }
 
 # ---------------------------------------------------------------------------------------
-# GLOBAL CSS (with underline fix + chevron fix)
+# SHAREPOINT LINKS (FILL THESE LATER)
 # ---------------------------------------------------------------------------------------
-st.markdown(f"""
+SHAREPOINT_LINKS = {
+    "Shallow Water": "https://petronas.sharepoint.com/sites/your-site/shallow-water",
+    "Deep Water": "https://petronas.sharepoint.com/sites/your-site/deep-water",
+    "Onshore": "https://petronas.sharepoint.com/sites/your-site/onshore",
+    "Unconventional": "https://petronas.sharepoint.com/sites/your-site/unconventional",
+    "CCS": "https://petronas.sharepoint.com/sites/your-site/ccs",
+    # you can edit these to the final SharePoint URLs later
+}
+
+# ---------------------------------------------------------------------------------------
+# GLOBAL CSS
+# ---------------------------------------------------------------------------------------
+st.markdown(
+    f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-html, body, [data-testid="stAppViewContainer"] * {{
+/* Use Inter for main document, but DO NOT override all children so icons stay correct */
+html, body {{
   font-family: 'Inter', sans-serif;
 }}
 
@@ -79,64 +94,29 @@ html, body, [data-testid="stAppViewContainer"] * {{
   padding-top: 0.5rem;
 }}
 
-#MainMenu, footer {{
-  visibility: hidden;
-}}
+#MainMenu, footer {{ visibility: hidden; }}
 
 /* ---------------- Sidebar ---------------- */
 [data-testid="stSidebar"] {{
-  background: linear-gradient(180deg, {PETRONAS["teal"]}, {PETRONAS["teal_dark"]});
+  background: linear-gradient(180deg, {PETRONAS["teal"]} 0%, {PETRONAS["teal_dark"]} 100%) !important;
   color: #fff !important;
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.15);
 }}
-[data-testid="stSidebar"] * {{
-  color: #fff !important;
-}}
+[data-testid="stSidebar"] * {{ color: #fff !important; }}
 
-/* ---------------- Chevron Toggle Fix ---------------- */
-[data-testid="collapsedControl"],
-div[title="Toggle sidebar"],
-button[aria-label="Toggle sidebar"] {{
-    position: fixed !important;
-    top: 50% !important;
-    left: 10px !important;
-    transform: translateY(-50%) !important;
-    width: 46px !important;
-    height: 46px !important;
-    background: linear-gradient(145deg, {PETRONAS["teal"]}, {PETRONAS["purple"]}) !important;
-    border-radius: 50% !important;
-    border: 1px solid rgba(255,255,255,0.25);
-    z-index: 99999 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    cursor: pointer !important;
-    box-shadow: 0 0 12px rgba(0,0,0,0.3);
-}}
+/* ========================= OPTIONAL: LIGHT TWEAK TO SIDEBAR TOGGLE ========================= */
+/* We let Streamlit keep its Material Icon (no more keyboard_double_arrow_right text)
+   but nudge position for a floating feel. Adjust as you like. */
 
-[data-testid="collapsedControl"] *,
-div[title="Toggle sidebar"] *,
-button[aria-label="Toggle sidebar"] * {{
-    color: transparent !important;
+[data-testid="collapsedControl"] {{
+  position: fixed !important;
+  top: 50% !important;
+  left: 10px !important;
+  transform: translateY(-50%) !important;
+  z-index: 9999 !important;
 }}
-
-[data-testid="collapsedControl"]::before,
-div[title="Toggle sidebar"]::before,
-button[aria-label="Toggle sidebar"]::before {{
-    content: "⟪";
-    font-size: 22px;
-    font-weight: 900;
-    color: white;
-}}
-
-[data-testid="collapsedControl"][aria-expanded="false"]::before,
-div[title="Toggle sidebar"][aria-expanded="false"]::before,
-button[aria-label="Toggle sidebar"][aria-expanded="false"]::before {{
-    content: "⟫";
-}}
-
 
 /* ---------------- Hero Header ---------------- */
 .petronas-hero {{
@@ -144,9 +124,9 @@ button[aria-label="Toggle sidebar"][aria-expanded="false"]::before {{
   padding: 28px 32px;
   margin: 6px 0 18px 0;
   color: #fff;
-  background: linear-gradient(135deg, {PETRONAS["teal"]}, {PETRONAS["purple"]});
+  background: linear-gradient(135deg, {PETRONAS["teal"]}, {PETRONAS["purple"]}, {PETRONAS["black"]});
   background-size: 200% 200%;
-  animation: heroGradient 8s ease-in-out infinite;
+  animation: heroGradient 8s ease-in-out infinite, fadeIn .8s ease-in-out, heroPulse 5s ease-in-out infinite;
   box-shadow: 0 10px 24px rgba(0,0,0,.12);
 }}
 @keyframes heroGradient {{
@@ -154,74 +134,100 @@ button[aria-label="Toggle sidebar"][aria-expanded="false"]::before {{
   50% {{ background-position: 100% 50%; }}
   100% {{ background-position: 0% 50%; }}
 }}
-
-.petronas-hero h1 {{
-    margin: 0 0 5px;
-    font-weight: 800;
+@keyframes fadeIn {{
+  from {{ opacity: 0; transform: translateY(10px); }}
+  to {{ opacity: 1; transform: translateY(0); }}
 }}
-.petronas-hero p {{
-    margin: 0;
-    opacity: .9;
-    font-weight: 500;
+@keyframes heroPulse {{
+  0%   {{ box-shadow: 0 0 16px rgba(0,161,155,0.45); }}
+  25%  {{ box-shadow: 0 0 26px rgba(108,77,211,0.55); }}
+  50%  {{ box-shadow: 0 0 36px rgba(0,161,155,0.55); }}
+  75%  {{ box-shadow: 0 0 26px rgba(108,77,211,0.55); }}
+  100% {{ box-shadow: 0 0 16px rgba(0,161,155,0.45); }}
 }}
+.petronas-hero h1 {{ margin: 0 0 5px; font-weight: 800; letter-spacing: 0.3px; }}
+.petronas-hero p {{ margin: 0; opacity: .9; font-weight: 500; }}
 
 /* ---------------- Buttons ---------------- */
-.pandora-button, .petronas-button, .stButton > button {{
-    border-radius: 12px;
-    padding: .65rem 1.2rem;
-    font-weight: 600;
-    color: white !important;
-    border: none;
-    background: linear-gradient(to right, {PETRONAS["teal"]}, {PETRONAS["purple"]});
-    background-size: 200% auto;
-    transition: 0.3s ease;
+.stButton > button, .stDownloadButton > button, .petronas-button {{
+  border-radius: 10px;
+  padding: .6rem 1.1rem;
+  font-weight: 600;
+  color: #fff !important;
+  border: none;
+  background: linear-gradient(to right, {PETRONAS["teal"]}, {PETRONAS["purple"]});
+  background-size: 200% auto;
+  transition: background-position .85s ease, transform .2s ease, box-shadow .25s ease;
+  text-decoration: none;
+  display: inline-block;
 }}
-.pandora-button:hover, .petronas-button:hover, .stButton > button:hover {{
-    background-position: right center;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0,0,0,.2);
-}}
-
-/* FORCE REMOVE UNDERLINE FROM LINK BUTTONS */
-a.petronas-button,
-a.petronas-button:link,
-a.petronas-button:visited,
-a.petronas-button:hover,
-a.petronas-button:active {{
-    text-decoration: none !important;
-    border: none !important;
+.stButton > button:hover, .stDownloadButton > button:hover, .petronas-button:hover {{
+  background-position: right center;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
 }}
 
 /* ---------------- Tabs ---------------- */
-.stTabs [role="tab"] {{
-    background: #fff;
-    color: {PETRONAS["black"]};
-    border-radius: 8px;
-    padding: 10px 18px;
-    border: 1px solid {PETRONAS["border"]};
-    font-weight: 600;
+.stTabs [role="tablist"] {{
+  display: flex;
+  gap: 8px;
+  border-bottom: none;
+  padding-bottom: 6px;
 }}
-
+.stTabs [role="tab"] {{
+  background: #fff;
+  color: {PETRONAS["black"]};
+  border-radius: 8px;
+  padding: 10px 18px;
+  border: 1px solid {PETRONAS["border"]};
+  font-weight: 600;
+  transition: all .3s ease;
+  position: relative;
+}}
+.stTabs [role="tab"]:hover {{
+  background: linear-gradient(to right, {PETRONAS["teal"]}, {PETRONAS["purple"]});
+  color: #fff;
+}}
 .stTabs [role="tab"][aria-selected="true"] {{
-    background: linear-gradient(to right, {PETRONAS["teal"]}, {PETRONAS["purple"]});
-    color: #fff;
-    border: none;
-    box-shadow: 0 4px 12px rgba(0,0,0,.2);
+  background: linear-gradient(to right, {PETRONAS["teal"]}, {PETRONAS["purple"]});
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}}
+.stTabs [role="tab"][aria-selected="true"]::after {{
+  content: "";
+  position: absolute;
+  left: 10%;
+  bottom: -3px;
+  width: 80%;
+  height: 3px;
+  background: linear-gradient(90deg, {PETRONAS["teal"]}, {PETRONAS["purple"]}, {PETRONAS["teal"]});
+  background-size: 200% 100%;
+  border-radius: 2px;
+  animation: glowSlide 2.5s linear infinite;
+}}
+@keyframes glowSlide {{
+  0% {{ background-position: 0% 50%; }}
+  50% {{ background-position: 100% 50%; }}
+  100% {{ background-position: 0% 50%; }}
 }}
 </style>
-""", unsafe_allow_html=True)
-
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------------------------------------
 # HERO HEADER
 # ---------------------------------------------------------------------------------------
-st.markdown("""
+st.markdown(
+    """
 <div class="petronas-hero">
   <h1>ABEX AI RT2025</h1>
   <p>Data-driven ABEX prediction & portfolio assembly</p>
 </div>
-""", unsafe_allow_html=True)
-
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------------------------------------
 # AUTH
@@ -248,33 +254,6 @@ if not st.session_state.authenticated:
                 st.error("❌ Invalid email or password.")
     st.stop()
 
-
-# ---------------------------------------------------------------------------------------
-# 6 SHAREPOINT BUTTONS (PLACEHOLDERS)
-# ---------------------------------------------------------------------------------------
-st.markdown("### 📁 Data Domains (Select Source)")
-
-btn_cols = st.columns(6)
-
-links_placeholder = "#"
-
-with btn_cols[0]:
-    st.markdown(f'<a href="{links_placeholder}" class="petronas-button">Shallow Water</a>', unsafe_allow_html=True)
-
-with btn_cols[1]:
-    st.markdown(f'<a href="{links_placeholder}" class="petronas-button">Deep Water</a>', unsafe_allow_html=True)
-
-with btn_cols[2]:
-    st.markdown(f'<a href="{links_placeholder}" class="petronas-button">Onshore</a>', unsafe_allow_html=True)
-
-with btn_cols[3]:
-    st.markdown(f'<a href="{links_placeholder}" class="petronas-button">Unconventional</a>', unsafe_allow_html=True)
-
-with btn_cols[4]:
-    st.markdown(f'<a href="{links_placeholder}" class="petronas-button">CCS</a>', unsafe_allow_html=True)
-
-with btn_cols[5]:
-    st.markdown(f'<a href="{links_placeholder}" class="petronas-button">Exploration</a>', unsafe_allow_html=True)
 # ---------------------------------------------------------------------------------------
 # SESSION STATE
 # ---------------------------------------------------------------------------------------
