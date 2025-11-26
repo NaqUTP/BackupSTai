@@ -64,6 +64,18 @@ PETRONAS = {
 }
 
 # ---------------------------------------------------------------------------------------
+# SHAREPOINT LINKS (FILL THESE LATER)
+# ---------------------------------------------------------------------------------------
+SHAREPOINT_LINKS = {
+    "SHALLOW WATER": "https://petronas.sharepoint.com/sites/your-site/shallow-water",
+    "DEEP WATER": "https://petronas.sharepoint.com/sites/your-site/deep-water",
+    "ONSHORE": "https://petronas.sharepoint.com/sites/your-site/onshore",
+    "UNCONVENTIONAL": "https://petronas.sharepoint.com/sites/your-site/unconventional",
+    "CCS": "https://petronas.sharepoint.com/sites/your-site/ccs",
+    # you can edit these to the final SharePoint URLs later
+}
+
+# ---------------------------------------------------------------------------------------
 # GLOBAL CSS
 # ---------------------------------------------------------------------------------------
 st.markdown(
@@ -896,26 +908,25 @@ def single_prediction(X, y, payload: dict, dataset_name: str = "default"):
 # ---------------------------------------------------------------------------------------
 # NAV ROW
 # ---------------------------------------------------------------------------------------
-nav_c1, nav_c2, nav_c3 = st.columns([1, 1, 1])
-with nav_c1:
-    st.button("📤 Upload Data", key="upload_top")
-with nav_c2:
-    if st.button("📈 New Prediction", key="predict_top"):
-        for ds in list(st.session_state.predictions.keys()):
-            st.session_state.predictions[ds] = []
-        st.session_state.processed_excel_files = set()
-        st.session_state._last_metrics = None
-        for k in list(st.session_state.keys()):
-            if str(k).startswith("in_"):
-                del st.session_state[k]
-        toast("Ready for a new prediction.")
-        st.rerun()
-with nav_c3:
-    st.button(
-        "📥 Download All",
-        disabled=True,
-        help="Use the Results / Project tabs for export.",
-    )
+# ---------------------------------------------------------------------------------------
+# NAV ROW — FIVE SHAREPOINT BUTTONS
+# ---------------------------------------------------------------------------------------
+nav_labels = ["SHALLOW WATER", "DEEP WATER", "ONSHORE", "UNCONVENTIONAL", "CCS"]
+nav_cols = st.columns(len(nav_labels))
+
+for col, label in zip(nav_cols, nav_labels):
+    with col:
+        url = SHAREPOINT_LINKS.get(label, "#")
+        st.markdown(
+            f'''
+            <a href="{url}" target="_blank" rel="noopener"
+               class="petronas-button"
+               style="width:100%; text-align:center; display:inline-block;">
+               {label}
+            </a>
+            ''',
+            unsafe_allow_html=True,
+        )
 
 # ---------------------------------------------------------------------------------------
 # TABS
