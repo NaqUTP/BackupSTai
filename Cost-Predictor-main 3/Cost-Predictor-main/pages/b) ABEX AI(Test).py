@@ -92,55 +92,62 @@ html, body, [data-testid="stAppViewContainer"] * {{
 }}
 [data-testid="stSidebar"] * {{ color: #fff !important; }}
 
-/* ---------------- Double-chevron toggle ---------------- */
-[data-testid="collapsedControl"],
-div[title="Toggle sidebar"],
-button[aria-label="Toggle sidebar"] {{
-  position: fixed !important;
-  top: 50% !important;
-  left: 8px !important;
-  transform: translateY(-50%) !important;
-  width: 42px !important;
-  height: 42px !important;
-  background: linear-gradient(145deg, rgba(0,161,155,0.95), rgba(108,77,211,0.9)) !important;
-  border-radius: 50% !important;
-  border: 1px solid rgba(255,255,255,0.25);
-  z-index: 99999 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  cursor: pointer !important;
-  transition: all 0.3s ease-in-out;
-  box-shadow: 0 0 12px rgba(0,161,155,0.7);
-  opacity: 1 !important;
-  visibility: visible !important;
+/* ========================= FIXED SIDEBAR CHEVRON TOGGLE ========================= */
+
+/* Target the NEW Streamlit toggle element */
+button[title="Toggle sidebar"],
+button[data-testid="baseButton-toggleSidebar"] {{
+    position: fixed !important;
+    top: 50% !important;
+    left: 10px !important;
+    transform: translateY(-50%) !important;
+
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 50% !important;
+
+    background: linear-gradient(145deg, {PETRONAS["teal"]}, {PETRONAS["purple"]}) !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    cursor: pointer !important;
+    z-index: 99999 !important;
+
+    box-shadow: 0 0 12px rgba(0,161,155,0.7);
+    transition: all 0.25s ease-in-out;
 }}
-[data-testid="collapsedControl"] * ,
-div[title="Toggle sidebar"] *,
-button[aria-label="Toggle sidebar"] * {{
-  color: transparent !important;
-  font-size: 0 !important;
+
+/* Remove Streamlit default arrow icon (keyboard_arrow_right/left) */
+button[title="Toggle sidebar"] svg,
+button[data-testid="baseButton-toggleSidebar"] svg {{
+    display: none !important;
 }}
-[data-testid="collapsedControl"]::before,
-div[title="Toggle sidebar"]::before,
-button[aria-label="Toggle sidebar"]::before {{
-  content: "⟪" !important;
-  font-size: 20px !important;
-  color: #fff !important;
-  text-shadow: 0 0 8px rgba(0,161,155,0.9);
-  font-weight: bold !important;
+
+/* Add custom chevron */
+button[title="Toggle sidebar"]::after,
+button[data-testid="baseButton-toggleSidebar"]::after {{
+    content: "⟪";
+    font-size: 20px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0,0,0,0.5);
+    transition: transform 0.25s ease-in-out;
 }}
-[data-testid="collapsedControl"][aria-expanded="false"]::before,
-div[title="Toggle sidebar"][aria-expanded="false"]::before,
-button[aria-label="Toggle sidebar"][aria-expanded="false"]::before {{
-  content: "⟫" !important;
-  text-shadow: 0 0 8px rgba(108,77,211,0.9);
+
+/* When sidebar is collapsed → arrow flips */
+button[title="Toggle sidebar"][aria-expanded="false"]::after,
+button[data-testid="baseButton-toggleSidebar"][aria-expanded="false"]::after {{
+    content: "⟫";
 }}
-[data-testid="collapsedControl"]:hover,
-div[title="Toggle sidebar"]:hover,
-button[aria-label="Toggle sidebar"]:hover {{
-  transform: translateY(-50%) scale(1.1);
-  box-shadow: 0 0 18px rgba(108,77,211,0.8);
+
+/* Hover effect */
+button[title="Toggle sidebar"]:hover,
+button[data-testid="baseButton-toggleSidebar"]:hover {{
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 0 18px rgba(108,77,211,0.8);
 }}
 
 /* ---------------- Hero Header ---------------- */
@@ -460,7 +467,7 @@ def create_project_pptx_report_abex(project_name, proj, currency=""):
     # Title slide
     slide = prs.slides.add_slide(prs.slide_layouts[5])
     title = slide.shapes.title
-    title.text = f"ABEX Project Report\n{project_name}"
+    title.text = f"ABEX Project Report\\n{project_name}"
     p = title.text_frame.paragraphs[0]
     p.alignment = PP_ALIGN.LEFT
     p.font.size = Pt(32)
@@ -495,7 +502,7 @@ def create_project_pptx_report_abex(project_name, proj, currency=""):
             f" • {c['component_type']}: {currency} {c['breakdown']['grand_total']:,.2f}"
         )
 
-    tf.text = "\n".join(lines)
+    tf.text = "\\n".join(lines)
     for para in tf.paragraphs:
         para.font.size = Pt(16)
 
@@ -692,7 +699,7 @@ def create_comparison_pptx_report_abex(projects_dict, currency=""):
         plt.close(fig)
         img_stream.seek(0)
 
-        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        slide = prs.slides.add_slide(prs.slides[0].slide_layout)
         title = slide.shapes.title
         title.text = "Grand Total by Project"
         slide.shapes.add_picture(img_stream, Inches(0.7), Inches(1.5), width=Inches(8.6))
