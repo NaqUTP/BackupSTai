@@ -6,3 +6,7 @@ scikit-learn>=1.0.0
 numpy>=1.21.0
 scipy>=1.7.0
 openpyxl>=3.0.0
+python-pptx
+plotly>=5.0.0
+Pillow>=9.0.0
+requests>=2.25.0
