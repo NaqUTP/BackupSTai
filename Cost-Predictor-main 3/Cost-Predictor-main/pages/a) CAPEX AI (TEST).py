@@ -1,21 +1,7 @@
 # ======================================================================================
 # CAPEX AI RT2026 - ENHANCED VERSION
 #
-# Added Features:
-# 1. Enhanced Prediction & Risk Analysis
-#    - Confidence Intervals (P10-P90)
-#    - Feature-level Sensitivity Analysis
-#    - Scenario Simulation
-# 2. Explainability & Transparency
-#    - SHAP Feature Importance Dashboard
-#    - Model Comparison Insights
-#    - Audit Trail System
-# 3. Advanced Analytics
-#    - Portfolio Risk Analytics
-#    - Budget Risk Alerts
-#    - Historical Benchmarking
-#
-# requirements.txt:
+# requirements.txt MUST INCLUDE:
 # streamlit
 # pandas
 # numpy
@@ -39,7 +25,6 @@ import pandas as pd
 import streamlit as st
 import datetime
 import uuid
-from scipy import stats
 
 # --- Guard: scikit-learn missing (prevents hard crash on Streamlit Cloud) ---
 try:
@@ -63,21 +48,20 @@ except Exception as e:
     )
     st.stop()
 
-from scipy.stats import linregress
-
-import plotly.express as px
-import plotly.graph_objects as go
-
-import matplotlib.pyplot as plt
-
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
-from pptx.dml.color import RGBColor
-
-from openpyxl.formatting.rule import ColorScaleRule
-from openpyxl.chart import BarChart, LineChart, Reference
-from openpyxl.utils import get_column_letter
+# --- Guard: scipy missing ---
+try:
+    from scipy.stats import linregress, stats
+    SCIPY_AVAILABLE = True
+except ImportError as e:
+    st.error(
+        "❌ Missing dependency: **scipy**.\n\n"
+        "Fix:\n"
+        "1) Open your **requirements.txt**\n"
+        "2) Add this line: `scipy`\n"
+        "3) Commit + redeploy.\n\n"
+        f"Details: {e}"
+    )
+    st.stop()
 
 # Try to import SHAP (optional)
 try:
@@ -85,7 +69,31 @@ try:
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
-    st.warning("SHAP not installed. Add `shap` to requirements.txt for enhanced explainability.")
+    # Don't show warning here - it will be shown in the relevant section
+
+import plotly.express as px
+import plotly.graph_objects as go
+
+import matplotlib.pyplot as plt
+
+try:
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+    from pptx.enum.text import PP_ALIGN
+    from pptx.dml.color import RGBColor
+    PPTX_AVAILABLE = True
+except ImportError:
+    PPTX_AVAILABLE = False
+    st.warning("python-pptx not installed. PowerPoint export features will be disabled.")
+
+try:
+    from openpyxl.formatting.rule import ColorScaleRule
+    from openpyxl.chart import BarChart, LineChart, Reference
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+    st.warning("openpyxl not installed. Advanced Excel export features will be disabled.")
 
 # ---------------------------------------------------------------------------------------
 # PAGE CONFIG
@@ -1850,7 +1858,7 @@ with tab_data:
         st.info("No data to export yet.")
 
 # =======================================================================================
-# PROJECT BUILDER TAB (UNCHANGED EXCEPT FOR AUDIT LOGGING)
+# PROJECT BUILDER TAB
 # =======================================================================================
 with tab_pb:
     st.markdown('<h4 style="margin:0;color:#000;">Project Builder</h4><p>Assemble multi-component CAPEX projects</p>', unsafe_allow_html=True)
@@ -2088,27 +2096,30 @@ with tab_pb:
         )
 
     with col_dl2:
-        # Create PPT report
-        prs = Presentation()
-        prs.slide_width = Inches(10)
-        prs.slide_height = Inches(7.5)
-        layout_title_only = prs.slide_layouts[5]
-        
-        slide = prs.slides.add_slide(layout_title_only)
-        title = slide.shapes.title
-        title.text = f"CAPEX Project Report\n{proj_sel}"
-        
-        ppt_output = io.BytesIO()
-        prs.save(ppt_output)
-        ppt_output.seek(0)
-        
-        st.download_button(
-            "⬇️ Download Project PowerPoint",
-            data=ppt_output,
-            file_name=f"{proj_sel}_CAPEX_Report.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            key=f"pb_dl_ppt_{proj_sel}",
-        )
+        # Create PPT report if available
+        if PPTX_AVAILABLE:
+            prs = Presentation()
+            prs.slide_width = Inches(10)
+            prs.slide_height = Inches(7.5)
+            layout_title_only = prs.slide_layouts[5]
+            
+            slide = prs.slides.add_slide(layout_title_only)
+            title = slide.shapes.title
+            title.text = f"CAPEX Project Report\n{proj_sel}"
+            
+            ppt_output = io.BytesIO()
+            prs.save(ppt_output)
+            ppt_output.seek(0)
+            
+            st.download_button(
+                "⬇️ Download Project PowerPoint",
+                data=ppt_output,
+                file_name=f"{proj_sel}_CAPEX_Report.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                key=f"pb_dl_ppt_{proj_sel}",
+            )
+        else:
+            st.info("PowerPoint export requires python-pptx")
 
     with col_dl3:
         st.download_button(
@@ -2138,7 +2149,7 @@ with tab_pb:
             st.error(f"Failed to import project JSON: {e}")
 
 # =======================================================================================
-# 🎲 MONTE CARLO TAB (WITH ENHANCED VISUALIZATIONS)
+# 🎲 MONTE CARLO TAB
 # =======================================================================================
 with tab_mc:
     st.markdown('<h3 style="margin-top:0;color:#000;">🎲 Monte Carlo Simulation</h3>', unsafe_allow_html=True)
@@ -2670,51 +2681,6 @@ with tab_compare:
         with col4:
             risk_premium = (total_p90 - total_p10) / total_base * 100 if total_base > 0 else 0
             st.metric("Risk Premium %", f"{risk_premium:.1f}%")
-        
-        # Efficient frontier simulation
-        st.markdown("#### 📈 Portfolio Efficient Frontier Simulation")
-        
-        if st.button("Simulate Portfolio Optimization", key="portfolio_opt"):
-            # Simple Monte Carlo simulation for portfolio
-            n_simulations = 10000
-            portfolio_sims = np.zeros(n_simulations)
-            
-            for p in compare_sel:
-                proj = st.session_state.projects[p]
-                t = project_totals(proj)
-                
-                # Generate random returns for each project
-                # Using lognormal distribution centered at base estimate
-                returns = np.random.lognormal(
-                    mean=np.log(max(t['grand_total'], 1)),
-                    sigma=0.3,  # 30% volatility
-                    size=n_simulations
-                )
-                portfolio_sims += returns
-            
-            # Calculate statistics
-            portfolio_p10 = np.percentile(portfolio_sims, 10)
-            portfolio_p50 = np.percentile(portfolio_sims, 50)
-            portfolio_p90 = np.percentile(portfolio_sims, 90)
-            
-            # Plot distribution
-            fig_portfolio = px.histogram(
-                x=portfolio_sims,
-                nbins=50,
-                title="Portfolio Value Distribution",
-                labels={'x': 'Portfolio Value', 'y': 'Frequency'}
-            )
-            
-            # Add confidence intervals
-            fig_portfolio.add_vline(x=portfolio_p10, line_dash="dash", 
-                                   annotation_text="P10", line_color="red")
-            fig_portfolio.add_vline(x=portfolio_p50, line_dash="solid", 
-                                   annotation_text="P50", line_color="green")
-            fig_portfolio.add_vline(x=portfolio_p90, line_dash="dash", 
-                                   annotation_text="P90", line_color="red")
-            
-            fig_portfolio.update_layout(height=400)
-            st.plotly_chart(fig_portfolio, use_container_width=True)
 
     # BUDGET RISK ALERTS
     with st.expander("🚨 Budget Risk Alerts", expanded=True):
@@ -3065,27 +3031,30 @@ with tab_compare:
         )
 
     with col_c2:
-        # Create comparison PPT report
-        prs = Presentation()
-        prs.slide_width = Inches(10)
-        prs.slide_height = Inches(7.5)
-        layout_title_only = prs.slide_layouts[5]
-        
-        slide = prs.slides.add_slide(layout_title_only)
-        title = slide.shapes.title
-        title.text = "CAPEX Project Comparison"
-        
-        ppt_output = io.BytesIO()
-        prs.save(ppt_output)
-        ppt_output.seek(0)
-        
-        st.download_button(
-            "⬇️ Download Comparison PowerPoint",
-            data=ppt_output,
-            file_name="CAPEX_Projects_Comparison.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            key="cmp_dl_ppt",
-        )
+        # Create comparison PPT report if available
+        if PPTX_AVAILABLE:
+            prs = Presentation()
+            prs.slide_width = Inches(10)
+            prs.slide_height = Inches(7.5)
+            layout_title_only = prs.slide_layouts[5]
+            
+            slide = prs.slides.add_slide(layout_title_only)
+            title = slide.shapes.title
+            title.text = "CAPEX Project Comparison"
+            
+            ppt_output = io.BytesIO()
+            prs.save(ppt_output)
+            ppt_output.seek(0)
+            
+            st.download_button(
+                "⬇️ Download Comparison PowerPoint",
+                data=ppt_output,
+                file_name="CAPEX_Projects_Comparison.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                key="cmp_dl_ppt",
+            )
+        else:
+            st.info("PowerPoint export requires python-pptx")
 
 # =======================================================================================
 # AUDIT TRAIL TAB
