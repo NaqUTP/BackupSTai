@@ -1,7 +1,8 @@
 # ======================================================================================
-# CAPEX AI RT2026 - ENHANCED VERSION
+# CAPEX AI RT2026 
 #
-# requirements.txt MUST INCLUDE:
+#
+# requirements.txt:
 # streamlit
 # pandas
 # numpy
@@ -12,7 +13,6 @@
 # python-pptx
 # openpyxl
 # requests
-# shap
 # ======================================================================================
 
 import io
@@ -23,8 +23,6 @@ import requests
 import numpy as np
 import pandas as pd
 import streamlit as st
-import datetime
-import uuid
 
 # --- Guard: scikit-learn missing (prevents hard crash on Streamlit Cloud) ---
 try:
@@ -48,58 +46,27 @@ except Exception as e:
     )
     st.stop()
 
-# --- Guard: scipy missing ---
-try:
-    from scipy.stats import linregress, stats
-    SCIPY_AVAILABLE = True
-except ImportError as e:
-    st.error(
-        "❌ Missing dependency: **scipy**.\n\n"
-        "Fix:\n"
-        "1) Open your **requirements.txt**\n"
-        "2) Add this line: `scipy`\n"
-        "3) Commit + redeploy.\n\n"
-        f"Details: {e}"
-    )
-    st.stop()
-
-# Try to import SHAP (optional)
-try:
-    import shap
-    SHAP_AVAILABLE = True
-except ImportError:
-    SHAP_AVAILABLE = False
-    # Don't show warning here - it will be shown in the relevant section
+from scipy.stats import linregress
 
 import plotly.express as px
 import plotly.graph_objects as go
 
 import matplotlib.pyplot as plt
 
-try:
-    from pptx import Presentation
-    from pptx.util import Inches, Pt
-    from pptx.enum.text import PP_ALIGN
-    from pptx.dml.color import RGBColor
-    PPTX_AVAILABLE = True
-except ImportError:
-    PPTX_AVAILABLE = False
-    st.warning("python-pptx not installed. PowerPoint export features will be disabled.")
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
 
-try:
-    from openpyxl.formatting.rule import ColorScaleRule
-    from openpyxl.chart import BarChart, LineChart, Reference
-    from openpyxl.utils import get_column_letter
-    OPENPYXL_AVAILABLE = True
-except ImportError:
-    OPENPYXL_AVAILABLE = False
-    st.warning("openpyxl not installed. Advanced Excel export features will be disabled.")
+from openpyxl.formatting.rule import ColorScaleRule
+from openpyxl.chart import BarChart, LineChart, Reference
+from openpyxl.utils import get_column_letter
 
 # ---------------------------------------------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------------------------------------------
 st.set_page_config(
-    page_title="CAPEX AI RT2026 - Enhanced",
+    page_title="CAPEX AI RT2026",
     page_icon="💠",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -247,40 +214,6 @@ html, body {{ font-family: 'Inter', sans-serif; }}
   50% {{ background-position: 100% 50%; }}
   100% {{ background-position: 0% 50%; }}
 }}
-
-/* New styles for enhanced features */
-.risk-high {{
-    background-color: #ffcccc;
-    padding: 5px;
-    border-radius: 5px;
-    border-left: 4px solid #ff4444;
-}}
-.risk-medium {{
-    background-color: #fff4cc;
-    padding: 5px;
-    border-radius: 5px;
-    border-left: 4px solid #ffbb33;
-}}
-.risk-low {{
-    background-color: #ccffcc;
-    padding: 5px;
-    border-radius: 5px;
-    border-left: 4px solid #00cc44;
-}}
-.alert-banner {{
-    background: linear-gradient(90deg, #ff4444, #ff8888);
-    color: white;
-    padding: 12px;
-    border-radius: 8px;
-    margin: 10px 0;
-    font-weight: bold;
-    animation: pulse 2s infinite;
-}}
-@keyframes pulse {{
-    0% {{ box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7); }}
-    70% {{ box-shadow: 0 0 0 10px rgba(255, 68, 68, 0); }}
-    100% {{ box-shadow: 0 0 0 0 rgba(255, 68, 68, 0); }}
-}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -292,8 +225,8 @@ html, body {{ font-family: 'Inter', sans-serif; }}
 st.markdown(
     """
 <div class="petronas-hero">
-  <h1>CAPEX AI RT2026 - Enhanced</h1>
-  <p>Data-driven CAPEX prediction with advanced risk analytics & explainability</p>
+  <h1>CAPEX AI RT2026</h1>
+  <p>Data-driven CAPEX prediction</p>
 </div>
 """,
     unsafe_allow_html=True,
@@ -319,7 +252,6 @@ if not st.session_state.authenticated:
             ok = (email in APPROVED_EMAILS) and (password == correct_password)
             if ok:
                 st.session_state.authenticated = True
-                st.session_state.user_email = email
                 st.success("✅ Access granted.")
                 st.rerun()
             else:
@@ -345,17 +277,9 @@ if "uploader_nonce" not in st.session_state:
     st.session_state.uploader_nonce = 0
 if "widget_nonce" not in st.session_state:
     st.session_state.widget_nonce = 0
-if "audit_log" not in st.session_state:
-    st.session_state.audit_log = []
-if "mc_results" not in st.session_state:
-    st.session_state.mc_results = {}
-if "shap_values" not in st.session_state:
-    st.session_state.shap_values = {}
-if "scenario_results" not in st.session_state:
-    st.session_state.scenario_results = {}
 
 # ---------------------------------------------------------------------------------------
-# ENHANCED HELPER FUNCTIONS
+# HELPERS
 # ---------------------------------------------------------------------------------------
 def toast(msg, icon="✅"):
     try:
@@ -363,11 +287,13 @@ def toast(msg, icon="✅"):
     except Exception:
         st.success(msg if icon == "✅" else msg)
 
+
 def format_with_commas(num):
     try:
         return f"{float(num):,.2f}"
     except Exception:
         return str(num)
+
 
 def normalize_to_100(d: dict):
     total = sum(float(v) for v in d.values())
@@ -381,9 +307,11 @@ def normalize_to_100(d: dict):
         rounded[keys[-1]] = round(rounded[keys[-1]] + diff, 2)
     return rounded, total
 
+
 def is_junk_col(colname: str) -> bool:
     h = str(colname).strip().upper()
     return (not h) or h.startswith("UNNAMED") or h in {"INDEX", "IDX"}
+
 
 def currency_from_header(header: str) -> str:
     h = (header or "").strip().upper()
@@ -399,6 +327,7 @@ def currency_from_header(header: str) -> str:
         return "RM"
     return ""
 
+
 def get_currency_symbol(df: pd.DataFrame, target_col: str | None = None) -> str:
     if df is None or df.empty:
         return ""
@@ -408,6 +337,7 @@ def get_currency_symbol(df: pd.DataFrame, target_col: str | None = None) -> str:
         if not is_junk_col(c):
             return currency_from_header(str(c))
     return ""
+
 
 def cost_breakdown(
     base_pred: float,
@@ -427,8 +357,10 @@ def cost_breakdown(
 
     eprr_costs = {k: round(base_pred * (float(v) / 100.0), 2) for k, v in (eprr or {}).items()}
 
+    # FIX: includes SST
     grand_total = round(base_pred + owners_cost + sst_cost + contingency_cost + escalation_cost, 2)
     return owners_cost, sst_cost, contingency_cost, escalation_cost, eprr_costs, grand_total
+
 
 def project_components_df(proj):
     comps = proj.get("components", [])
@@ -449,6 +381,7 @@ def project_components_df(proj):
         )
     return pd.DataFrame(rows)
 
+
 def project_totals(proj):
     dfc = project_components_df(proj)
     if dfc.empty:
@@ -462,212 +395,6 @@ def project_totals(proj):
         "grand_total": float(dfc["Grand Total"].sum()),
     }
 
-# ======================================================================================
-# ENHANCED PREDICTION & RISK ANALYSIS FUNCTIONS
-# ======================================================================================
-def calculate_prediction_interval(model_pipe, X_train, y_train, X_pred, confidence=0.80):
-    """Calculate prediction intervals using bootstrapped residuals method"""
-    # Get predictions on training data
-    y_train_pred = model_pipe.predict(X_train)
-    residuals = y_train - y_train_pred
-    
-    # Bootstrap residuals to get prediction intervals
-    n_bootstrap = 1000
-    pred_samples = np.zeros((n_bootstrap, len(X_pred)))
-    
-    for i in range(n_bootstrap):
-        # Resample residuals
-        resampled_residuals = np.random.choice(residuals, size=len(X_pred), replace=True)
-        # Get predictions
-        base_pred = model_pipe.predict(X_pred)
-        # Add resampled residuals
-        pred_samples[i] = base_pred + resampled_residuals
-    
-    # Calculate percentiles
-    lower_percentile = (1 - confidence) / 2 * 100
-    upper_percentile = (1 + confidence) / 2 * 100
-    
-    lower = np.percentile(pred_samples, lower_percentile, axis=0)
-    upper = np.percentile(pred_samples, upper_percentile, axis=0)
-    median = np.percentile(pred_samples, 50, axis=0)
-    
-    return median, lower, upper, pred_samples
-
-def feature_sensitivity_analysis(model_pipe, feature_cols, base_payload, variation_pct=10):
-    """Perform one-at-a-time sensitivity analysis on features"""
-    sensitivity_results = {}
-    base_values = {col: base_payload.get(col, np.nan) for col in feature_cols}
-    
-    # Get base prediction
-    base_df = pd.DataFrame([base_values], columns=feature_cols)
-    base_pred = float(model_pipe.predict(base_df)[0])
-    
-    for feature in feature_cols:
-        if pd.isna(base_values[feature]):
-            continue
-            
-        try:
-            # Calculate +/- variation
-            original_val = float(base_values[feature])
-            if original_val == 0:
-                continue
-                
-            # Calculate variations
-            variations = {
-                f"+{variation_pct}%": original_val * (1 + variation_pct/100),
-                f"-{variation_pct}%": original_val * (1 - variation_pct/100)
-            }
-            
-            # Get predictions for variations
-            preds = {}
-            for label, val in variations.items():
-                modified_values = base_values.copy()
-                modified_values[feature] = val
-                mod_df = pd.DataFrame([modified_values], columns=feature_cols)
-                preds[label] = float(model_pipe.predict(mod_df)[0])
-            
-            # Calculate sensitivity metrics
-            high_pred = preds[f"+{variation_pct}%"]
-            low_pred = preds[f"-{variation_pct}%"]
-            
-            sensitivity_results[feature] = {
-                'base_value': original_val,
-                'base_prediction': base_pred,
-                'high_prediction': high_pred,
-                'low_prediction': low_pred,
-                'absolute_change': abs(high_pred - low_pred),
-                'relative_change_pct': abs(high_pred - low_pred) / base_pred * 100 if base_pred != 0 else 0,
-                'elasticity': ((high_pred - low_pred) / base_pred) / (2 * variation_pct/100)
-            }
-            
-        except Exception as e:
-            sensitivity_results[feature] = {'error': str(e)}
-    
-    return pd.DataFrame(sensitivity_results).T.sort_values('relative_change_pct', ascending=False)
-
-def scenario_simulation(model_pipe, feature_cols, base_scenario, scenarios_dict):
-    """Simulate multiple scenarios and compare results"""
-    results = []
-    
-    for scenario_name, scenario_params in scenarios_dict.items():
-        # Merge base with scenario-specific changes
-        scenario_values = base_scenario.copy()
-        scenario_values.update(scenario_params)
-        
-        # Create DataFrame for prediction
-        scenario_df = pd.DataFrame([scenario_values], columns=feature_cols)
-        
-        try:
-            pred = float(model_pipe.predict(scenario_df)[0])
-            results.append({
-                'Scenario': scenario_name,
-                'Prediction': pred,
-                **scenario_params
-            })
-        except Exception as e:
-            results.append({
-                'Scenario': scenario_name,
-                'Prediction': np.nan,
-                'Error': str(e)
-            })
-    
-    return pd.DataFrame(results)
-
-# ======================================================================================
-# EXPLAINABILITY & TRANSPARENCY FUNCTIONS
-# ======================================================================================
-def generate_shap_explanations(model_pipe, X_train, X_sample, feature_names):
-    """Generate SHAP values for model explainability"""
-    try:
-        if not SHAP_AVAILABLE:
-            return None
-            
-        # Extract the actual model from the pipeline
-        model = model_pipe.named_steps['model']
-        
-        # Handle different model types
-        if isinstance(model, (RandomForestRegressor, GradientBoostingRegressor, DecisionTreeRegressor)):
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X_sample)
-            expected_value = explainer.expected_value
-        elif isinstance(model, (Ridge, Lasso)):
-            explainer = shap.LinearExplainer(model, X_train)
-            shap_values = explainer.shap_values(X_sample)
-            expected_value = explainer.expected_value
-        else:
-            # Use KernelSHAP as fallback
-            explainer = shap.KernelExplainer(model_pipe.predict, X_train[:100])
-            shap_values = explainer.shap_values(X_sample)
-            expected_value = explainer.expected_value
-            
-        return {
-            'shap_values': shap_values,
-            'expected_value': expected_value,
-            'feature_names': feature_names,
-            'X_sample': X_sample
-        }
-    except Exception as e:
-        st.error(f"SHAP explanation failed: {e}")
-        return None
-
-def log_audit_event(event_type, details, model_version=None, user=None):
-    """Log audit events for compliance and tracking"""
-    audit_entry = {
-        'timestamp': datetime.datetime.now().isoformat(),
-        'event_id': str(uuid.uuid4())[:8],
-        'event_type': event_type,
-        'details': details,
-        'model_version': model_version or 'unknown',
-        'user': user or st.session_state.get('user_email', 'anonymous')
-    }
-    
-    st.session_state.audit_log.append(audit_entry)
-    
-    # Keep only last 1000 entries
-    if len(st.session_state.audit_log) > 1000:
-        st.session_state.audit_log = st.session_state.audit_log[-1000:]
-    
-    return audit_entry
-
-# ======================================================================================
-# ADVANCED ANALYTICS FUNCTIONS
-# ======================================================================================
-def calculate_portfolio_metrics(projects_dict):
-    """Calculate aggregated portfolio risk metrics"""
-    portfolio_data = []
-    
-    for proj_name, proj in projects_dict.items():
-        t = project_totals(proj)
-        
-        # Check for Monte Carlo results
-        mc_key = f"{proj_name}_mc"
-        if mc_key in st.session_state.mc_results:
-            mc_data = st.session_state.mc_results[mc_key]
-            if 'project_grand_total' in mc_data.columns:
-                p10 = np.percentile(mc_data['project_grand_total'], 10)
-                p50 = np.percentile(mc_data['project_grand_total'], 50)
-                p90 = np.percentile(mc_data['project_grand_total'], 90)
-                exceed_prob = (mc_data['project_grand_total'] > t['grand_total']).mean() * 100
-            else:
-                p10, p50, p90 = t['grand_total'] * 0.9, t['grand_total'], t['grand_total'] * 1.1
-                exceed_prob = 50.0
-        else:
-            p10, p50, p90 = t['grand_total'] * 0.9, t['grand_total'], t['grand_total'] * 1.1
-            exceed_prob = 50.0
-        
-        portfolio_data.append({
-            'Project': proj_name,
-            'Base Estimate': t['grand_total'],
-            'P10': p10,
-            'P50': p50,
-            'P90': p90,
-            'Risk Range': p90 - p10,
-            'Exceedance Probability %': exceed_prob,
-            'CVaR 95%': p90,
-            'Risk Level': 'High' if exceed_prob > 70 else 'Medium' if exceed_prob > 30 else 'Low'
-        })
-    
-    return pd.DataFrame(portfolio_data)
 
 # ======================================================================================
 # TARGET ALWAYS LAST COLUMN (with safe numeric coercion)
@@ -677,10 +404,12 @@ def get_last_column_target(df: pd.DataFrame) -> str:
         raise ValueError("Empty dataset.")
     return str(df.columns[-1])
 
+
 def coerce_series_numeric(s: pd.Series) -> pd.Series:
     if pd.api.types.is_numeric_dtype(s):
         return s.astype(float)
     return pd.to_numeric(s, errors="coerce")
+
 
 def numeric_features_from_df(df: pd.DataFrame, target_col: str) -> tuple[pd.DataFrame, pd.Series]:
     """
@@ -721,6 +450,7 @@ def numeric_features_from_df(df: pd.DataFrame, target_col: str) -> tuple[pd.Data
 
     return X, y.astype(float)
 
+
 # ======================================================================================
 # ✅ MONTE CARLO HELPERS
 # ======================================================================================
@@ -733,6 +463,7 @@ def _coerce_float(x, default=np.nan):
         return float(x)
     except Exception:
         return default
+
 
 def monte_carlo_component(
     model_pipe: Pipeline,
@@ -811,6 +542,7 @@ def monte_carlo_component(
 
     return out
 
+
 def scenario_bucket_from_baseline(values: pd.Series, baseline: float, low_cut_pct: float, band_pct: float, high_cut_pct: float):
     baseline = float(baseline) if np.isfinite(baseline) and float(baseline) != 0 else float(values.median())
     pct_delta = (values - baseline) / baseline
@@ -826,6 +558,7 @@ def scenario_bucket_from_baseline(values: pd.Series, baseline: float, low_cut_pc
 
     buckets = pct_delta.apply(label)
     return buckets, pct_delta * 100.0
+
 
 # ---------------------------------------------------------------------------------------
 # DATA / MODEL HELPERS
@@ -845,11 +578,13 @@ MODEL_CANDIDATES = {
 }
 SCALE_MODELS = {"Ridge", "Lasso", "SVR"}
 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_json(url: str):
     r = requests.get(url, timeout=15)
     r.raise_for_status()
     return r.json()
+
 
 @st.cache_data(ttl=600, show_spinner=False)
 def list_csvs_from_manifest(folder_path: str):
@@ -863,6 +598,7 @@ def list_csvs_from_manifest(folder_path: str):
         st.error(f"Failed to load CSV manifest: {e}")
         return []
 
+
 def make_pipeline(model_name: str, random_state=42):
     ctor = MODEL_CANDIDATES[model_name]
     try:
@@ -875,6 +611,7 @@ def make_pipeline(model_name: str, random_state=42):
         steps.append(("scaler", MinMaxScaler()))
     steps.append(("model", model))
     return Pipeline(steps)
+
 
 def evaluate_models(X, y, test_size=0.2, random_state=42):
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=random_state)
@@ -900,6 +637,7 @@ def evaluate_models(X, y, test_size=0.2, random_state=42):
     metrics = {"best_model": best_name, "rmse": best_rmse, "r2": best_r2, "models": rows_sorted}
     return metrics
 
+
 @st.cache_resource(show_spinner=False)
 def train_best_model_cached(df: pd.DataFrame, target_col: str, test_size: float, random_state: int, dataset_key: str):
     X, y = numeric_features_from_df(df, target_col)
@@ -908,6 +646,7 @@ def train_best_model_cached(df: pd.DataFrame, target_col: str, test_size: float,
     best_pipe = make_pipeline(best_name, random_state=random_state)
     best_pipe.fit(X, y)
     return best_pipe, metrics, list(X.columns), target_col, best_name
+
 
 def single_prediction(model_pipe: Pipeline, feature_cols: list[str], payload: dict):
     row = {}
@@ -923,6 +662,7 @@ def single_prediction(model_pipe: Pipeline, feature_cols: list[str], payload: di
     df_in = pd.DataFrame([row], columns=feature_cols)
     return float(model_pipe.predict(df_in)[0])
 
+
 @st.cache_data(show_spinner=False, ttl=600)
 def knn_impute_numeric(df: pd.DataFrame, k: int = 5):
     # purely numeric
@@ -932,6 +672,7 @@ def knn_impute_numeric(df: pd.DataFrame, k: int = 5):
         raise ValueError("Need at least 2 numeric columns for KNN viz.")
     arr = KNNImputer(n_neighbors=k).fit_transform(num)
     return pd.DataFrame(arr, columns=num.columns)
+
 
 # ---------------------------------------------------------------------------------------
 # NAV ROW — SHAREPOINT BUTTONS
@@ -953,17 +694,17 @@ for col, label in zip(nav_cols, nav_labels):
         )
 
 # ---------------------------------------------------------------------------------------
-# TOP-LEVEL TABS (ADDED AUDIT TRAIL TAB)
+# TOP-LEVEL TABS
 # ---------------------------------------------------------------------------------------
-tab_data, tab_pb, tab_mc, tab_compare, tab_audit = st.tabs(
-    ["📊 Data", "🏗️ Project Builder", "🎲 Monte Carlo", "🔀 Compare Projects", "📋 Audit Trail"]
+tab_data, tab_pb, tab_mc, tab_compare = st.tabs(
+    ["📊 Data", "🏗️ Project Builder", "🎲 Monte Carlo", "🔀 Compare Projects"]
 )
 
 # =======================================================================================
-# DATA TAB (WITH ENHANCED FEATURES)
+# DATA TAB
 # =======================================================================================
 with tab_data:
-    st.markdown('<h3 style="margin-top:0;color:#000;">📁 Data & Enhanced Analytics</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0;color:#000;">📁 Data</h3>', unsafe_allow_html=True)
 
     st.markdown('<h4 style="margin:0;color:#000;">Data Sources</h4><p></p>', unsafe_allow_html=True)
     c1, c2 = st.columns([1.2, 1])
@@ -1001,18 +742,6 @@ with tab_data:
                     df = pd.read_csv(raw_url)
                     st.session_state.datasets[selected_file] = df
                     st.session_state.predictions.setdefault(selected_file, [])
-                    
-                    # Log the data load event
-                    log_audit_event(
-                        event_type='data_load',
-                        details={
-                            'dataset': selected_file,
-                            'source': 'github',
-                            'rows': len(df),
-                            'columns': len(df.columns)
-                        }
-                    )
-                    
                     toast(f"Loaded from GitHub: {selected_file}")
                     st.rerun()
                 except Exception as e:
@@ -1027,17 +756,6 @@ with tab_data:
                     df = pd.read_csv(up)
                     st.session_state.datasets[up.name] = df
                     st.session_state.predictions.setdefault(up.name, [])
-                    
-                    # Log the data upload event
-                    log_audit_event(
-                        event_type='data_upload',
-                        details={
-                            'dataset': up.name,
-                            'rows': len(df),
-                            'columns': len(df.columns)
-                        }
-                    )
-                    
                 except Exception as e:
                     st.error(f"Failed to read {up.name}: {e}")
         toast("Dataset(s) added.")
@@ -1078,7 +796,7 @@ with tab_data:
     st.divider()
 
     # -------------------------
-    # Active dataset preview
+    # Active dataset preview + target selection (NOW: always last column)
     # -------------------------
     if st.session_state.datasets:
         ds_name_data = st.selectbox("Active dataset", list(st.session_state.datasets.keys()), key="active_dataset_data")
@@ -1107,7 +825,7 @@ with tab_data:
 
     # ========================= MODEL TRAINING =================================
     st.divider()
-    st.markdown('<h3 style="margin-top:0;color:#000;">⚙️ Model Training & Explainability</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0;color:#000;">⚙️ Model</h3>', unsafe_allow_html=True)
 
     ds_name_model = st.selectbox("Dataset for model training", list(st.session_state.datasets.keys()), key="ds_model")
     df_model = st.session_state.datasets[ds_name_model]
@@ -1131,25 +849,9 @@ with tab_data:
                     random_state=42,
                     dataset_key=ds_name_model,
                 )
-                
-                # Log the training event
-                log_audit_event(
-                    event_type='model_training',
-                    details={
-                        'dataset': ds_name_model,
-                        'best_model': best_name,
-                        'r2_score': metrics['r2'],
-                        'rmse': metrics['rmse'],
-                        'test_size': test_size
-                    },
-                    model_version=f"{best_name}_v1"
-                )
-                
             st.session_state._last_metrics = metrics
             st.session_state[f"best_model__{ds_name_model}"] = best_name
             toast("Training complete.")
-            
-            # Display metrics
             c_rmse, c_r2, c_best = st.columns(3)
             with c_rmse:
                 st.metric("RMSE (best)", f"{metrics['rmse']:,.2f}")
@@ -1158,414 +860,17 @@ with tab_data:
             with c_best:
                 st.metric("Best Model", best_name)
 
-            # Model comparison insights
-            st.markdown("##### 🏆 Model Comparison Insights")
             models_list = metrics.get("models", [])
             if models_list:
                 df_models = pd.DataFrame(models_list).set_index("model")
-                
-                # Add model characteristics
-                model_insights = {
-                    'RandomForest': 'Non-linear, handles interactions well, robust to outliers',
-                    'GradientBoosting': 'Sequential learning, good for complex patterns',
-                    'Ridge': 'Linear, handles multicollinearity, interpretable',
-                    'Lasso': 'Linear, feature selection via shrinkage',
-                    'SVR': 'Non-linear with kernels, good for high-dimensional spaces',
-                    'DecisionTree': 'Non-linear, highly interpretable, prone to overfitting'
-                }
-                
-                df_models['Characteristics'] = df_models.index.map(lambda x: model_insights.get(x, 'N/A'))
-                df_models['Best For'] = df_models.index.map(
-                    lambda x: 'Complex patterns' if x in ['RandomForest', 'GradientBoosting'] 
-                    else 'Linear relationships' if x in ['Ridge', 'Lasso']
-                    else 'Non-linear with kernels' if x == 'SVR'
-                    else 'Simple interpretability'
-                )
-                
-                st.dataframe(df_models.style.format({
-                    'rmse': '{:,.2f}',
-                    'r2': '{:.3f}'
-                }), use_container_width=True)
-                
-                # Explain why best model was chosen
-                st.info(f"""
-                **Why {best_name} was chosen as best model:**
-                - **Highest R² score**: {metrics['r2']:.3f} (closer to 1 is better)
-                - **Lowest RMSE**: {metrics['rmse']:.2f} (lower is better)
-                - **Model Type**: {model_insights.get(best_name, 'N/A')}
-                - **Recommendation**: {best_name} balances performance and robustness for this dataset
-                """)
+                st.markdown("##### Model comparison")
+                st.dataframe(df_models, use_container_width=True)
         except Exception as e:
             st.error(f"Training failed: {e}")
 
-    # ========================= ENHANCED PREDICTION & RISK ANALYSIS =====================
-    st.divider()
-    st.markdown('<h3 style="margin-top:0;color:#000;">🎯 Enhanced Prediction & Risk Analysis</h3>', unsafe_allow_html=True)
-
-    # CONFIDENCE INTERVALS
-    with st.expander("🔍 Confidence Intervals (P10-P90)", expanded=False):
-        st.markdown("**Get prediction ranges for better risk awareness**")
-        
-        ds_name_ci = st.selectbox("Select dataset for confidence intervals", 
-                                 list(st.session_state.datasets.keys()), key="ds_ci")
-        
-        if ds_name_ci in st.session_state.datasets:
-            df_ci = st.session_state.datasets[ds_name_ci]
-            target_col_ci = get_last_column_target(df_ci)
-            
-            try:
-                pipe_ci, _, feat_cols_ci, y_name_ci, _ = train_best_model_cached(
-                    df_ci, target_col_ci, test_size=0.2, random_state=42, dataset_key=f"ci_{ds_name_ci}"
-                )
-                
-                # Prepare training data for intervals
-                X_train_ci, y_train_ci = numeric_features_from_df(df_ci, target_col_ci)
-                
-                st.markdown("**Input Values for Prediction:**")
-                sample_payload = {}
-                cols = st.columns(3)
-                
-                for i, feat in enumerate(feat_cols_ci[:9]):  # Show first 9 features
-                    col_idx = i % 3
-                    with cols[col_idx]:
-                        median_val = df_ci[feat].median() if not df_ci[feat].isnull().all() else 0
-                        sample_payload[feat] = st.number_input(
-                            f"{feat}", 
-                            value=float(median_val),
-                            key=f"ci_{feat}_{ds_name_ci}"
-                        )
-                
-                confidence_level = st.slider("Confidence Level", 0.50, 0.95, 0.80, 0.05, key="confidence_level")
-                
-                if st.button("Calculate Prediction Interval", key="calc_ci"):
-                    X_pred_ci = pd.DataFrame([sample_payload], columns=feat_cols_ci)
-                    
-                    median, lower, upper, samples = calculate_prediction_interval(
-                        pipe_ci, X_train_ci, y_train_ci, X_pred_ci, confidence=confidence_level
-                    )
-                    
-                    # Display results
-                    st.markdown("### 📈 Prediction Range")
-                    fig_ci = go.Figure()
-                    
-                    # Add histogram of predictions
-                    fig_ci.add_trace(go.Histogram(
-                        x=samples[0],
-                        name='Prediction Distribution',
-                        nbinsx=30,
-                        opacity=0.7,
-                        marker_color=PETRONAS['teal']
-                    ))
-                    
-                    # Add confidence intervals
-                    lower_pct = (1 - confidence_level) / 2 * 100
-                    upper_pct = (1 + confidence_level) / 2 * 100
-                    
-                    fig_ci.add_vline(x=lower[0], line_dash="dash", line_color="red", 
-                                    annotation_text=f"P{lower_pct:.0f}: {lower[0]:,.2f}")
-                    fig_ci.add_vline(x=upper[0], line_dash="dash", line_color="red",
-                                    annotation_text=f"P{upper_pct:.0f}: {upper[0]:,.2f}")
-                    fig_ci.add_vline(x=median[0], line_dash="solid", line_color="green",
-                                    annotation_text=f"P50: {median[0]:,.2f}")
-                    
-                    fig_ci.update_layout(
-                        title=f"Prediction Distribution with {confidence_level*100:.0f}% Confidence Intervals",
-                        xaxis_title="Predicted Value",
-                        yaxis_title="Frequency",
-                        showlegend=True,
-                        height=400
-                    )
-                    
-                    st.plotly_chart(fig_ci, use_container_width=True)
-                    
-                    # Show metrics
-                    cols = st.columns(4)
-                    with cols[0]:
-                        st.metric(f"P{lower_pct:.0f} (Low)", f"{lower[0]:,.2f}")
-                    with cols[1]:
-                        st.metric("P50 (Median)", f"{median[0]:,.2f}")
-                    with cols[2]:
-                        st.metric(f"P{upper_pct:.0f} (High)", f"{upper[0]:,.2f}")
-                    with cols[3]:
-                        range_pct = (upper[0] - lower[0]) / median[0] * 100 if median[0] != 0 else 0
-                        st.metric("Range (%)", f"{range_pct:.1f}%")
-                        
-            except Exception as e:
-                st.error(f"Error calculating confidence intervals: {e}")
-
-    # FEATURE SENSITIVITY ANALYSIS
-    with st.expander("🎯 Feature Sensitivity Analysis", expanded=False):
-        st.markdown("**Understand which features drive cost variance the most**")
-        
-        ds_name_sens = st.selectbox("Select dataset for sensitivity", 
-                                   list(st.session_state.datasets.keys()), key="ds_sens")
-        
-        if ds_name_sens in st.session_state.datasets:
-            df_sens = st.session_state.datasets[ds_name_sens]
-            target_col_sens = get_last_column_target(df_sens)
-            
-            pipe_sens, _, feat_cols_sens, y_name_sens, _ = train_best_model_cached(
-                df_sens, target_col_sens, test_size=0.2, random_state=42, dataset_key=f"sens_{ds_name_sens}"
-            )
-            
-            # Get median values for features
-            base_values = {}
-            for feat in feat_cols_sens[:10]:  # Limit to 10 features for performance
-                if feat in df_sens.columns:
-                    base_values[feat] = float(df_sens[feat].median())
-            
-            variation_pct = st.slider("Variation Percentage", 5, 50, 10, 5, key="variation_pct")
-            
-            if st.button("Run Sensitivity Analysis", key="run_sensitivity"):
-                with st.spinner("Analyzing feature sensitivity..."):
-                    sensitivity_df = feature_sensitivity_analysis(
-                        pipe_sens, list(base_values.keys()), base_values, variation_pct
-                    )
-                    
-                    # Store for later use
-                    st.session_state[f"sensitivity_{ds_name_sens}"] = sensitivity_df
-                    
-                    # Display tornado chart
-                    st.markdown(f"### 📊 Sensitivity Tornado Chart (±{variation_pct}% variation)")
-                    fig_tornado = px.bar(
-                        sensitivity_df.reset_index(),
-                        x='relative_change_pct',
-                        y='index',
-                        orientation='h',
-                        title='Feature Sensitivity Analysis',
-                        color='absolute_change',
-                        color_continuous_scale='Viridis'
-                    )
-                    fig_tornado.update_layout(
-                        xaxis_title="% Change in Prediction",
-                        yaxis_title="Feature",
-                        height=500
-                    )
-                    st.plotly_chart(fig_tornado, use_container_width=True)
-                    
-                    # Display detailed results
-                    st.markdown("### 📋 Detailed Sensitivity Results")
-                    display_df = sensitivity_df[['base_value', 'base_prediction', 
-                                               'high_prediction', 'low_prediction',
-                                               'relative_change_pct', 'elasticity']].copy()
-                    display_df.columns = ['Base Value', 'Base Pred', 'High Pred', 
-                                         'Low Pred', '% Change', 'Elasticity']
-                    st.dataframe(display_df.style.format({
-                        'Base Value': '{:,.2f}',
-                        'Base Pred': '{:,.2f}',
-                        'High Pred': '{:,.2f}',
-                        'Low Pred': '{:,.2f}',
-                        '% Change': '{:.2f}%',
-                        'Elasticity': '{:.4f}'
-                    }), use_container_width=True)
-
-    # SCENARIO SIMULATION
-    with st.expander("🔄 Scenario Simulation", expanded=False):
-        st.markdown("**Simulate multiple what-if scenarios**")
-        
-        ds_name_scenario = st.selectbox("Select dataset for scenarios", 
-                                       list(st.session_state.datasets.keys()), key="ds_scenario")
-        
-        if ds_name_scenario in st.session_state.datasets:
-            df_scenario = st.session_state.datasets[ds_name_scenario]
-            target_col_scenario = get_last_column_target(df_scenario)
-            
-            pipe_scenario, _, feat_cols_scenario, y_name_scenario, _ = train_best_model_cached(
-                df_scenario, target_col_scenario, test_size=0.2, random_state=42, 
-                dataset_key=f"scenario_{ds_name_scenario}"
-            )
-            
-            # Base scenario inputs
-            st.markdown("### Base Scenario Configuration")
-            base_scenario = {}
-            
-            # Let user select key features to vary
-            key_features = st.multiselect(
-                "Select features to vary across scenarios", 
-                feat_cols_scenario[:15],  # Limit for UI
-                default=feat_cols_scenario[:3] if len(feat_cols_scenario) >= 3 else feat_cols_scenario
-            )
-            
-            # Create input columns for base values
-            cols = st.columns(3)
-            for i, feat in enumerate(key_features):
-                col_idx = i % 3
-                with cols[col_idx]:
-                    median_val = float(df_scenario[feat].median()) if not df_scenario[feat].isnull().all() else 0
-                    base_scenario[feat] = st.number_input(
-                        f"Base: {feat}", 
-                        value=median_val,
-                        key=f"base_{feat}"
-                    )
-            
-            # Define scenarios
-            st.markdown("### Define Scenarios")
-            scenarios = {
-                'Base Case': {},
-                'Optimistic': {},
-                'Pessimistic': {}
-            }
-            
-            # Create scenario sliders
-            for feat in key_features:
-                base_val = base_scenario[feat]
-                optimistic_val = base_val * 0.8 if base_val != 0 else 0
-                pessimistic_val = base_val * 1.2 if base_val != 0 else 0
-                
-                scenarios['Optimistic'][feat] = optimistic_val
-                scenarios['Pessimistic'][feat] = pessimistic_val
-            
-            # Add custom scenario
-            st.markdown("### Custom Scenario")
-            custom_name = st.text_input("Custom Scenario Name", "Custom Case")
-            custom_scenario = {}
-            
-            for feat in key_features:
-                base_val = base_scenario[feat]
-                custom_val = st.slider(
-                    f"{feat} for Custom Scenario",
-                    min_value=float(base_val * 0.5),
-                    max_value=float(base_val * 2.0),
-                    value=float(base_val),
-                    key=f"custom_{feat}"
-                )
-                custom_scenario[feat] = custom_val
-            
-            scenarios[custom_name] = custom_scenario
-            
-            if st.button("Run Scenario Simulation", key="run_scenarios"):
-                results_df = scenario_simulation(pipe_scenario, feat_cols_scenario, 
-                                               base_scenario, scenarios)
-                
-                # Store results
-                st.session_state.scenario_results[ds_name_scenario] = results_df
-                
-                # Visualize results
-                st.markdown("### 📊 Scenario Comparison")
-                
-                fig_scenarios = px.bar(
-                    results_df,
-                    x='Scenario',
-                    y='Prediction',
-                    title='Scenario Analysis Results',
-                    color='Prediction',
-                    color_continuous_scale='RdYlGn_r'
-                )
-                fig_scenarios.update_layout(height=400)
-                st.plotly_chart(fig_scenarios, use_container_width=True)
-                
-                # Show comparison table
-                st.markdown("### 📋 Detailed Comparison")
-                pivot_table = results_df.pivot_table(
-                    values='Prediction',
-                    columns='Scenario'
-                ).reset_index(drop=True)
-                
-                # Calculate deltas from base
-                if 'Base Case' in pivot_table.columns:
-                    base_value = pivot_table['Base Case'].iloc[0]
-                    for col in pivot_table.columns:
-                        if col != 'Base Case':
-                            pivot_table[f'{col} vs Base %'] = (
-                                (pivot_table[col] - base_value) / base_value * 100
-                            )
-                
-                st.dataframe(pivot_table.style.format({
-                    **{col: '{:,.2f}' for col in scenarios.keys()},
-                    **{f'{col} vs Base %': '{:+.2f}%' for col in scenarios.keys() if col != 'Base Case'}
-                }), use_container_width=True)
-
-    # SHAP EXPLAINABILITY
-    if SHAP_AVAILABLE:
-        with st.expander("🧠 SHAP Feature Importance Dashboard", expanded=False):
-            st.markdown("**Understand what drives model predictions**")
-            
-            ds_name_shap = st.selectbox("Select dataset for SHAP analysis", 
-                                       list(st.session_state.datasets.keys()), key="ds_shap")
-            
-            if ds_name_shap in st.session_state.datasets:
-                df_shap = st.session_state.datasets[ds_name_shap]
-                target_col_shap = get_last_column_target(df_shap)
-                
-                # Get model and data
-                X_shap, y_shap = numeric_features_from_df(df_shap, target_col_shap)
-                pipe_shap, _, feat_cols_shap, _, _ = train_best_model_cached(
-                    df_shap, target_col_shap, test_size=0.2, random_state=42, 
-                    dataset_key=f"shap_{ds_name_shap}"
-                )
-                
-                # Sample data for SHAP (for performance)
-                if len(X_shap) > 1000:
-                    X_sample = X_shap.sample(1000, random_state=42)
-                else:
-                    X_sample = X_shap.copy()
-                
-                if st.button("Generate SHAP Analysis", key="run_shap"):
-                    with st.spinner("Calculating SHAP values (this may take a minute)..."):
-                        shap_results = generate_shap_explanations(
-                            pipe_shap, X_shap, X_sample, feat_cols_shap
-                        )
-                        
-                        if shap_results:
-                            st.session_state.shap_values[ds_name_shap] = shap_results
-                            
-                            # 1. Global Feature Importance
-                            st.markdown("### 🌍 Global Feature Importance")
-                            shap_values = shap_results['shap_values']
-                            
-                            # Summary plot
-                            fig1, ax1 = plt.subplots(figsize=(10, 6))
-                            shap.summary_plot(shap_values, X_sample, feature_names=feat_cols_shap, 
-                                             plot_type="bar", show=False)
-                            st.pyplot(fig1)
-                            plt.close()
-                            
-                            # 2. Detailed summary plot
-                            st.markdown("### 📈 Feature Impact Direction")
-                            fig2, ax2 = plt.subplots(figsize=(12, 8))
-                            shap.summary_plot(shap_values, X_sample, feature_names=feat_cols_shap, 
-                                             show=False)
-                            st.pyplot(fig2)
-                            plt.close()
-                            
-                            # 3. Individual prediction explanation
-                            st.markdown("### 🔍 Explain Individual Prediction")
-                            instance_idx = st.slider("Select instance to explain", 
-                                                    0, min(50, len(X_sample)-1), 0,
-                                                    key="shap_instance")
-                            
-                            if isinstance(shap_values, list):
-                                shap_val_instance = shap_values[instance_idx]
-                            else:
-                                shap_val_instance = shap_values[instance_idx]
-                            
-                            # Waterfall plot
-                            st.markdown(f"**Instance {instance_idx} - Actual Value: {y_shap.iloc[instance_idx]:.2f}**")
-                            fig3, ax3 = plt.subplots(figsize=(12, 6))
-                            shap.plots._waterfall.waterfall_legacy(
-                                shap_results['expected_value'],
-                                shap_val_instance,
-                                feature_names=feat_cols_shap,
-                                max_display=15,
-                                show=False
-                            )
-                            st.pyplot(fig3)
-                            plt.close()
-    else:
-        with st.expander("🧠 SHAP Feature Importance (Requires Installation)", expanded=False):
-            st.warning("""
-            **SHAP not installed. To enable model explainability:**
-            
-            1. Add `shap` to your **requirements.txt**
-            2. Redeploy the application
-            3. Refresh this page
-            
-            SHAP provides detailed explanations of model predictions and feature importance.
-            """)
-
     # ========================= VISUALIZATION ==================================
     st.divider()
-    st.markdown('<h3 style="margin-top:0;color:#000;">📈 Basic Visualization</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0;color:#000;">📈 Visualization</h3>', unsafe_allow_html=True)
 
     ds_name_viz = st.selectbox("Dataset for visualization", list(st.session_state.datasets.keys()), key="ds_viz")
     df_viz = st.session_state.datasets[ds_name_viz]
@@ -1639,7 +944,7 @@ with tab_data:
 
     # ========================= PREDICT =======================================
     st.divider()
-    st.markdown('<h3 style="margin-top:0;color:#000;">🎯 Single & Batch Prediction</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0;color:#000;">🎯 Predict</h3>', unsafe_allow_html=True)
 
     ds_name_pred = st.selectbox("Dataset for prediction", list(st.session_state.datasets.keys()), key="ds_pred")
     df_pred = st.session_state.datasets[ds_name_pred]
@@ -1647,25 +952,21 @@ with tab_data:
     st.session_state[f"target_col__{ds_name_pred}"] = target_col_pred
     currency_pred = get_currency_symbol(df_pred, target_col_pred)
 
-    st.markdown('<h4 style="margin:0;color:#000;">Configuration (EPRR • Financial)</h4><p>Step 1</p>', unsafe_allow_html=True)
+    st.markdown('<h4 style="margin:0;color:#000;">WBS Level 1</h4><p>Step 1</p>', unsafe_allow_html=True)
     c1, c2 = st.columns([1, 1])
     with c1:
-        st.markdown("**EPRR Breakdown (%)** (use +/-)")
-        eng = st.number_input("Engineering (%)", min_value=0.0, max_value=100.0, value=12.0, step=1.0, key="pred_eng")
-        prep = st.number_input("Preparation (%)", min_value=0.0, max_value=100.0, value=7.0, step=1.0, key="pred_prep")
-        remv = st.number_input("Removal (%)", min_value=0.0, max_value=100.0, value=54.0, step=1.0, key="pred_remv")
-        remd = st.number_input("Remediation (%)", min_value=0.0, max_value=100.0, value=27.0, step=1.0, key="pred_remd")
+        st.markdown("(use +/-)")
+        eng = st.number_input("Engineering (%)", min_value=0.0, max_value=100.0, value=0.0, step=1.0, key="pred_eng")  # Changed to 0.0
+        procurement = st.number_input("Procurement (%)", min_value=0.0, max_value=100.0, value=0.0, step=1.0, key="pred_procurement")  # Changed to 0.0
+        fabrication = st.number_input("Fabrication/Construction (%)", min_value=0.0, max_value=100.0, value=0.0, step=1.0, key="pred_fabrication")  # Changed to 0.0
+        ti = st.number_input("Transportation & Installation (T&I) (%)", min_value=0.0, max_value=100.0, value=0.0, step=1.0, key="pred_ti")  # Changed to 0.0
 
-        eprr = {"Engineering": eng, "Preparation": prep, "Removal": remv, "Remediation": remd}
+        eprr = {"Engineering": eng, "Procurement": procurement, "Fabrication/Construction": fabrication, "Transportation & Installation": ti}
         eprr_total = sum(eprr.values())
-        st.caption(f"EPRR total: **{eprr_total:.2f}%**")
-
-        apply_norm = st.checkbox("Normalize EPRR to 100% for this run", value=False, key="pred_norm_eprr")
-        if apply_norm and eprr_total > 0 and abs(eprr_total - 100.0) > 1e-6:
-            eprr, _ = normalize_to_100(eprr)
+        st.caption(f"WBS total: **{eprr_total:.2f}%**")
 
     with c2:
-        st.markdown("**Financial (%)** (use +/-)")
+        st.markdown("(use +/-)")
         sst_pct = st.number_input("SST (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key="pred_sst")
         owners_pct = st.number_input("Owner's Cost (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key="pred_owner")
         cont_pct = st.number_input("Contingency (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key="pred_cont")
@@ -1721,21 +1022,6 @@ with tab_data:
 
             st.session_state.predictions.setdefault(ds_name_pred, []).append(result)
             st.session_state.widget_nonce += 1
-            
-            # Log the prediction event
-            log_audit_event(
-                event_type='prediction',
-                details={
-                    'project_name': project_name,
-                    'dataset': ds_name_pred,
-                    'model': best_name,
-                    'features': {k: v for k, v in payload.items() if not pd.isna(v)},
-                    'prediction': float(pred_val),
-                    'grand_total': float(grand_total)
-                },
-                model_version=f"{best_name}_v1"
-            )
-            
             toast("Prediction added to Results.")
 
             cA, cB, cC, cD, cE = st.columns(5)
@@ -1765,18 +1051,6 @@ with tab_data:
                     st.error(f"Missing required columns in Excel: {missing}")
                 else:
                     preds = pipe.predict(batch_df[feat_cols])
-                    
-                    # Log batch prediction
-                    log_audit_event(
-                        event_type='batch_prediction',
-                        details={
-                            'dataset': ds_name_pred,
-                            'file': xls.name,
-                            'rows_processed': len(batch_df),
-                            'model': best_name
-                        },
-                        model_version=f"{best_name}_v1"
-                    )
 
                     for i, row in batch_df.iterrows():
                         name = row.get("Project Name", f"Project {i+1}")
@@ -1810,7 +1084,7 @@ with tab_data:
 
     # ========================= RESULTS / EXPORT ==============================
     st.divider()
-    st.markdown('<h3 style="margin-top:0;color:#000;">📄 Results & Export</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0;color:#000;">📄 Results</h3>', unsafe_allow_html=True)
 
     ds_name_res = st.selectbox("Dataset", list(st.session_state.datasets.keys()), key="ds_results")
     preds = st.session_state.predictions.get(ds_name_res, [])
@@ -1857,6 +1131,505 @@ with tab_data:
     else:
         st.info("No data to export yet.")
 
+
+# =======================================================================================
+# EXPORT HELPERS (Excel / PPT)
+# =======================================================================================
+def _format_ws_money(ws, start_row=2):
+    ws.freeze_panes = "A2"
+    for c in range(1, ws.max_column + 1):
+        ws.column_dimensions[get_column_letter(c)].width = 18
+    for r in range(start_row, ws.max_row + 1):
+        for c in range(1, ws.max_column + 1):
+            cell = ws.cell(r, c)
+            if isinstance(cell.value, (int, float)) and c >= 3:
+                cell.number_format = "#,##0.00"
+
+
+def create_project_excel_report_capex(project_name, proj, currency=""):
+    output = io.BytesIO()
+    comps_df = project_components_df(proj)
+
+    if comps_df.empty:
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            pd.DataFrame({"Info": [f"No components for project {project_name}"]}).to_excel(
+                writer, sheet_name="Summary", index=False
+            )
+        output.seek(0)
+        return output
+
+    totals = project_totals(proj)
+
+    summary_df = comps_df.copy()
+    summary_df.loc[len(summary_df)] = {
+        "Component": "TOTAL",
+        "Dataset": "",
+        "Model": "",
+        "Base CAPEX": totals["capex_sum"],
+        "Owner's Cost": totals["owners"],
+        "Contingency": totals["cont"],
+        "Escalation": totals["esc"],
+        "SST": totals["sst"],
+        "Grand Total": totals["grand_total"],
+    }
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        summary_df.to_excel(writer, sheet_name="Summary", index=False)
+        ws = writer.sheets["Summary"]
+        _format_ws_money(ws)
+
+        max_row = ws.max_row
+        max_col = ws.max_column
+
+        for col_idx in range(4, max_col + 1):
+            col_letter = get_column_letter(col_idx)
+            ws.conditional_formatting.add(
+                f"{col_letter}2:{col_letter}{max_row-1}",
+                ColorScaleRule(
+                    start_type="percentile",
+                    start_value=10,
+                    start_color="FFE0F7FA",
+                    mid_type="percentile",
+                    mid_value=50,
+                    mid_color="FF80DEEA",
+                    end_type="percentile",
+                    end_value=90,
+                    end_color="FF00838F",
+                ),
+            )
+
+        chart = BarChart()
+        chart.title = "Grand Total by Component"
+        data = Reference(ws, min_col=10, max_col=10, min_row=1, max_row=max_row - 1)
+        cats = Reference(ws, min_col=1, min_row=2, max_row=max_row - 1)
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(cats)
+        chart.y_axis.title = f"Cost ({currency})".strip()
+        chart.x_axis.title = "Component"
+        chart.height = 10
+        chart.width = 18
+        ws.add_chart(chart, "L2")
+
+        line = LineChart()
+        line.title = "Base CAPEX Trend"
+        data_capex = Reference(ws, min_col=4, max_col=4, min_row=1, max_row=max_row - 1)
+        line.add_data(data_capex, titles_from_data=True)
+        line.set_categories(cats)
+        line.y_axis.title = f"Base CAPEX ({currency})".strip()
+        line.height = 10
+        line.width = 18
+        ws.add_chart(line, "L20")
+
+        comps_df.to_excel(writer, sheet_name="Components Detail", index=False)
+        _format_ws_money(writer.sheets["Components Detail"])
+
+    output.seek(0)
+    return output
+
+
+def create_project_pptx_report_capex(project_name, proj, currency=""):
+    prs = Presentation()
+    prs.slide_width = Inches(10)
+    prs.slide_height = Inches(7.5)
+
+    layout_title_only = prs.slide_layouts[5]
+    layout_title_content = prs.slide_layouts[1]
+
+    slide = prs.slides.add_slide(layout_title_only)
+    title = slide.shapes.title
+    title.text = f"CAPEX Project Report\n{project_name}"
+    p = title.text_frame.paragraphs[0]
+    p.alignment = PP_ALIGN.LEFT
+    p.font.size = Pt(32)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(0, 161, 155)
+
+    comps_df = project_components_df(proj)
+    comps = proj.get("components", [])
+    totals = project_totals(proj)
+
+    slide = prs.slides.add_slide(layout_title_content)
+    slide.shapes.title.text = "Executive Summary"
+    body = slide.shapes.placeholders[1].text_frame
+    body.clear()
+
+    lines = [
+        f"Project: {project_name}",
+        f"Total Components: {len(comps)}",
+        f"Total Base CAPEX: {currency} {totals['capex_sum']:,.2f}",
+        f"Total Grand Total (incl. SST): {currency} {totals['grand_total']:,.2f}",
+        "",
+        "Components:",
+    ]
+    for c in comps:
+        lines.append(f"• {c['component_type']}: {currency} {c['breakdown']['grand_total']:,.2f}")
+
+    for i, line in enumerate(lines):
+        para = body.paragraphs[0] if i == 0 else body.add_paragraph()
+        para.text = line
+        para.font.size = Pt(16)
+
+    if not comps_df.empty:
+        fig, ax = plt.subplots(figsize=(7, 4))
+        ax.bar(comps_df["Component"], comps_df["Grand Total"])
+        ax.set_title("Grand Total by Component")
+        ax.set_ylabel(f"Cost ({currency})".strip())
+        ax.tick_params(axis="x", rotation=25)
+        ax.grid(axis="y", linestyle="--", alpha=0.4)
+        fig.tight_layout()
+
+        img_stream = io.BytesIO()
+        fig.savefig(img_stream, format="png", dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        img_stream.seek(0)
+
+        slide = prs.slides.add_slide(layout_title_only)
+        slide.shapes.title.text = "Grand Total by Component"
+        slide.shapes.add_picture(img_stream, Inches(0.7), Inches(1.5), width=Inches(8.6))
+
+        fig2, ax2 = plt.subplots(figsize=(7, 4))
+        labels = comps_df["Component"]
+        base = comps_df["Base CAPEX"]
+        owners = comps_df["Owner's Cost"]
+        cont = comps_df["Contingency"]
+        esc = comps_df["Escalation"]
+        sst = comps_df["SST"]
+
+        bottom = np.zeros(len(labels))
+        for vals, lab in [
+            (base, "Base CAPEX"),
+            (owners, "Owner"),
+            (cont, "Contingency"),
+            (esc, "Escalation"),
+            (sst, "SST"),
+        ]:
+            ax2.bar(labels, vals, bottom=bottom, label=lab)
+            bottom += np.array(vals, dtype=float)
+
+        ax2.set_title("Cost Composition by Component")
+        ax2.set_ylabel(f"Cost ({currency})".strip())
+        ax2.tick_params(axis="x", rotation=25)
+        ax2.grid(axis="y", linestyle="--", alpha=0.4)
+        ax2.legend(fontsize=8, ncol=3)
+        fig2.tight_layout()
+
+        img_stream2 = io.BytesIO()
+        fig2.savefig(img_stream2, format="png", dpi=200, bbox_inches="tight")
+        plt.close(fig2)
+        img_stream2.seek(0)
+
+        slide2 = prs.slides.add_slide(layout_title_only)
+        slide2.shapes.title.text = "Cost Composition by Component"
+        slide2.shapes.add_picture(img_stream2, Inches(0.7), Inches(1.5), width=Inches(8.6))
+
+    output = io.BytesIO()
+    prs.save(output)
+    output.seek(0)
+    return output
+
+
+def create_comparison_excel_report_capex(projects_dict, currency=""):
+    output = io.BytesIO()
+
+    summary_rows = []
+    for name, proj in projects_dict.items():
+        t = project_totals(proj)
+        summary_rows.append(
+            {
+                "Project": name,
+                "Components": len(proj.get("components", [])),
+                "CAPEX Sum": t["capex_sum"],
+                "Owner": t["owners"],
+                "Contingency": t["cont"],
+                "Escalation": t["esc"],
+                "SST": t["sst"],
+                "Grand Total": t["grand_total"],
+            }
+        )
+
+    summary_df = pd.DataFrame(summary_rows)
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        summary_df.to_excel(writer, sheet_name="Projects Summary", index=False)
+        ws = writer.sheets["Projects Summary"]
+        _format_ws_money(ws)
+
+        max_row = ws.max_row
+        max_col = ws.max_column
+
+        for col_idx in range(3, max_col + 1):
+            col_letter = get_column_letter(col_idx)
+            ws.conditional_formatting.add(
+                f"{col_letter}2:{col_letter}{max_row}",
+                ColorScaleRule(
+                    start_type="percentile",
+                    start_value=10,
+                    start_color="FFE3F2FD",
+                    mid_type="percentile",
+                    mid_value=50,
+                    mid_color="FF90CAF9",
+                    end_type="percentile",
+                    end_value=90,
+                    end_color="FF1565C0",
+                ),
+            )
+
+        chart = BarChart()
+        chart.title = "Grand Total by Project"
+        data = Reference(ws, min_col=8, max_col=8, min_row=1, max_row=max_row)
+        cats = Reference(ws, min_col=1, min_row=2, max_row=max_row)
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(cats)
+        chart.y_axis.title = f"Cost ({currency})".strip()
+        chart.x_axis.title = "Project"
+        chart.height = 10
+        chart.width = 18
+        ws.add_chart(chart, "J2")
+
+        for name, proj in projects_dict.items():
+            dfc = project_components_df(proj)
+            if dfc.empty:
+                continue
+            sheet_name = name[:31]
+            dfc.to_excel(writer, sheet_name=sheet_name, index=False)
+            _format_ws_money(writer.sheets[sheet_name])
+
+    output.seek(0)
+    return output
+
+
+def create_comparison_pptx_report_capex(projects_dict, currency=""):
+    prs = Presentation()
+    prs.slide_width = Inches(10)
+    prs.slide_height = Inches(7.5)
+
+    layout_title_only = prs.slide_layouts[5]
+
+    slide = prs.slides.add_slide(layout_title_only)
+    title = slide.shapes.title
+    title.text = "CAPEX Project Comparison"
+    p = title.text_frame.paragraphs[0]
+    p.font.size = Pt(32)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(0, 161, 155)
+
+    rows = []
+    for name, proj in projects_dict.items():
+        t = project_totals(proj)
+        rows.append(
+            {
+                "Project": name,
+                "CAPEX Sum": t["capex_sum"],
+                "Owner": t["owners"],
+                "Contingency": t["cont"],
+                "Escalation": t["esc"],
+                "SST": t["sst"],
+                "Grand Total": t["grand_total"],
+            }
+        )
+    df_proj = pd.DataFrame(rows)
+
+    if not df_proj.empty:
+        fig, ax = plt.subplots(figsize=(7, 4))
+        ax.bar(df_proj["Project"], df_proj["Grand Total"])
+        ax.set_title("Grand Total by Project")
+        ax.set_ylabel(f"Cost ({currency})".strip())
+        ax.tick_params(axis="x", rotation=25)
+        ax.grid(axis="y", linestyle="--", alpha=0.4)
+        fig.tight_layout()
+
+        img_stream = io.BytesIO()
+        fig.savefig(img_stream, format="png", dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        img_stream.seek(0)
+
+        slide = prs.slides.add_slide(layout_title_only)
+        slide.shapes.title.text = "Grand Total by Project"
+        slide.shapes.add_picture(img_stream, Inches(0.7), Inches(1.5), width=Inches(8.6))
+
+        fig2, ax2 = plt.subplots(figsize=(7, 4))
+        labels = df_proj["Project"]
+        base = df_proj["CAPEX Sum"]
+        owners = df_proj["Owner"]
+        cont = df_proj["Contingency"]
+        esc = df_proj["Escalation"]
+        sst = df_proj["SST"]
+
+        bottom = np.zeros(len(labels))
+        for vals, lab in [
+            (base, "Base CAPEX"),
+            (owners, "Owner"),
+            (cont, "Contingency"),
+            (esc, "Escalation"),
+            (sst, "SST"),
+        ]:
+            ax2.bar(labels, vals, bottom=bottom, label=lab)
+            bottom += np.array(vals, dtype=float)
+
+        ax2.set_title("Cost Composition by Project")
+        ax2.set_ylabel(f"Cost ({currency})".strip())
+        ax2.tick_params(axis="x", rotation=25)
+        ax2.grid(axis="y", linestyle="--", alpha=0.4)
+        ax2.legend(fontsize=8, ncol=3)
+        fig2.tight_layout()
+
+        img_stream2 = io.BytesIO()
+        fig2.savefig(img_stream2, format="png", dpi=200, bbox_inches="tight")
+        plt.close(fig2)
+        img_stream2.seek(0)
+
+        slide2 = prs.slides.add_slide(layout_title_only)
+        slide2.shapes.title.text = "Cost Composition by Project"
+        slide2.shapes.add_picture(img_stream2, Inches(0.7), Inches(1.5), width=Inches(8.6))
+
+    output = io.BytesIO()
+    prs.save(output)
+    output.seek(0)
+    return output
+
+
+# ======================================================================================
+# MONTE CARLO EXPORT HELPERS (Excel + PPT) — TRUE FAN (probability axis)
+# ======================================================================================
+def create_monte_carlo_excel_report(
+    project_name: str,
+    df_proj_mc: pd.DataFrame,
+    df_curve: pd.DataFrame,
+    df_fan_true: pd.DataFrame,
+    df_tornado: pd.DataFrame,
+    df_comp_sims: pd.DataFrame,
+) -> io.BytesIO:
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine="openpyxl") as writer:
+        df_proj_mc.to_excel(writer, sheet_name="ProjectSims", index=False)
+        df_curve.to_excel(writer, sheet_name="Curve", index=False)
+        df_fan_true.to_excel(writer, sheet_name="Fan_True", index=False)
+        df_tornado.to_excel(writer, sheet_name="Tornado", index=False)
+        df_comp_sims.to_excel(writer, sheet_name="ComponentSims", index=False)
+
+        for name in ["ProjectSims", "Curve", "Fan_True", "Tornado", "ComponentSims"]:
+            ws = writer.sheets[name]
+            ws.freeze_panes = "A2"
+            for c in range(1, ws.max_column + 1):
+                ws.column_dimensions[get_column_letter(c)].width = 22
+    out.seek(0)
+    return out
+
+
+def create_monte_carlo_pptx_report(
+    project_name: str,
+    currency: str,
+    baseline_gt: float,
+    budget: float,
+    p50: float,
+    p80: float,
+    p90: float,
+    exceed_prob_pct: float,
+    df_curve: pd.DataFrame,
+    df_fan_true: pd.DataFrame,
+    df_tornado: pd.DataFrame,
+) -> io.BytesIO:
+    prs = Presentation()
+    prs.slide_width = Inches(10)
+    prs.slide_height = Inches(7.5)
+
+    layout_title_only = prs.slide_layouts[5]
+    layout_title_content = prs.slide_layouts[1]
+
+    # Slide 1: Title
+    s1 = prs.slides.add_slide(layout_title_only)
+    s1.shapes.title.text = f"Monte Carlo Report\n{project_name}"
+
+    # Slide 2: Summary
+    s2 = prs.slides.add_slide(layout_title_content)
+    s2.shapes.title.text = "Executive Summary"
+    tf = s2.shapes.placeholders[1].text_frame
+    tf.clear()
+    lines = [
+        f"Baseline GT: {currency} {baseline_gt:,.2f}",
+        f"Budget: {currency} {budget:,.2f}",
+        f"P50: {currency} {p50:,.2f}",
+        f"P80: {currency} {p80:,.2f}",
+        f"P90: {currency} {p90:,.2f}",
+        f"P(> Budget): {exceed_prob_pct:.1f}%",
+    ]
+    for i, line in enumerate(lines):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.text = line
+        p.font.size = Pt(18)
+
+    # Slide 3: Curve - REMOVE EXCEEDANCE LINE
+    fig, ax = plt.subplots(figsize=(8.5, 4.5))
+    ax.plot(df_curve["x"], df_curve["cdf"], label="CDF (P ≤ X)")
+    # Removed exceedance line
+    ax.axvline(p50, linestyle=":", label="P50")
+    ax.axvline(p80, linestyle=":", label="P80")
+    ax.axvline(p90, linestyle=":", label="P90")
+    ax.axvline(budget, linestyle="-.", label="Budget")
+    ax.set_title("CDF Curve")
+    ax.set_xlabel(f"Project Grand Total ({currency})")
+    ax.set_ylabel("Probability")
+    ax.grid(True, linestyle="--", alpha=0.3)
+    ax.legend(fontsize=9, ncol=2)
+    fig.tight_layout()
+
+    img = io.BytesIO()
+    fig.savefig(img, format="png", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    img.seek(0)
+
+    s3 = prs.slides.add_slide(layout_title_only)
+    s3.shapes.title.text = "CDF Curve"
+    s3.shapes.add_picture(img, Inches(0.7), Inches(1.5), width=Inches(8.6))
+
+    # Slide 4: TRUE Fan (probability axis)
+    fig2, ax2 = plt.subplots(figsize=(8.5, 4.5))
+    ax2.fill_between(df_fan_true["prob"], df_fan_true["p10"], df_fan_true["p90"], alpha=0.25, label="P10–P90")
+    ax2.fill_between(df_fan_true["prob"], df_fan_true["p20"], df_fan_true["p80"], alpha=0.35, label="P20–P80")
+    ax2.fill_between(df_fan_true["prob"], df_fan_true["p40"], df_fan_true["p60"], alpha=0.45, label="P40–P60")
+    ax2.plot(df_fan_true["prob"], df_fan_true["p50"], linewidth=2.5, label="P50")
+    ax2.axhline(budget, linestyle="-.", label="Budget")
+    ax2.set_title("TRUE Fan Chart (Confidence → Cost)")
+    ax2.set_xlabel("Confidence Level (%)")
+    ax2.set_ylabel(f"Cost ({currency})")
+    ax2.grid(True, linestyle="--", alpha=0.3)
+    ax2.legend(fontsize=9, ncol=2)
+    fig2.tight_layout()
+
+    img2 = io.BytesIO()
+    fig2.savefig(img2, format="png", dpi=200, bbox_inches="tight")
+    plt.close(fig2)
+    img2.seek(0)
+
+    s4 = prs.slides.add_slide(layout_title_only)
+    s4.shapes.title.text = "TRUE Fan Chart"
+    s4.shapes.add_picture(img2, Inches(0.7), Inches(1.5), width=Inches(8.6))
+
+    # Slide 5: Tornado
+    df_t = df_tornado.sort_values("variance_share_pct", ascending=True)
+
+    fig3, ax3 = plt.subplots(figsize=(8.5, 4.5))
+    ax3.barh(df_t["Component"], df_t["variance_share_pct"])
+    ax3.set_title("Sensitivity Tornado (Variance Share)")
+    ax3.set_xlabel("Variance Contribution (%)")
+    ax3.grid(True, axis="x", linestyle="--", alpha=0.3)
+    fig3.tight_layout()
+
+    img3 = io.BytesIO()
+    fig3.savefig(img3, format="png", dpi=200, bbox_inches="tight")
+    plt.close(fig3)
+    img3.seek(0)
+
+    s5 = prs.slides.add_slide(layout_title_only)
+    s5.shapes.title.text = "Sensitivity Tornado"
+    s5.shapes.add_picture(img3, Inches(0.7), Inches(1.5), width=Inches(8.6))
+
+    out = io.BytesIO()
+    prs.save(out)
+    out.seek(0)
+    return out
+
+
 # =======================================================================================
 # PROJECT BUILDER TAB
 # =======================================================================================
@@ -1874,13 +1647,6 @@ with tab_pb:
         if new_project_name and new_project_name not in st.session_state.projects:
             if st.button("Create Project", key="pb_create_project_btn"):
                 st.session_state.projects[new_project_name] = {"components": [], "totals": {}, "currency": ""}
-                
-                # Log project creation
-                log_audit_event(
-                    event_type='project_created',
-                    details={'project_name': new_project_name}
-                )
-                
                 toast(f"Project '{new_project_name}' created.")
                 st.rerun()
 
@@ -1929,24 +1695,21 @@ with tab_pb:
     comp_payload = comp_edited.iloc[0].to_dict()
 
     st.markdown("---")
-    st.markdown("**Cost Percentage Inputs**")
+    st.markdown("**WBS Level 1**")
     cp1, cp2 = st.columns(2)
     with cp1:
-        st.markdown("EPRR (%) — use +/-")
-        eng_pb = st.number_input("Engineering", 0.0, 100.0, 12.0, 1.0, key=f"pb_eng_{proj_sel}")
-        prep_pb = st.number_input("Preparation", 0.0, 100.0, 7.0, 1.0, key=f"pb_prep_{proj_sel}")
-        remv_pb = st.number_input("Removal", 0.0, 100.0, 54.0, 1.0, key=f"pb_remv_{proj_sel}")
-        remd_pb = st.number_input("Remediation", 0.0, 100.0, 27.0, 1.0, key=f"pb_remd_{proj_sel}")
+        st.markdown("use +/-")
+        eng_pb = st.number_input("Engineering", 0.0, 100.0, 0.0, 1.0, key=f"pb_eng_{proj_sel}")  # Changed to 0.0
+        procurement_pb = st.number_input("Procurement", 0.0, 100.0, 0.0, 1.0, key=f"pb_procurement_{proj_sel}")  # Changed to 0.0
+        fabrication_pb = st.number_input("Fabrication/Construction", 0.0, 100.0, 0.0, 1.0, key=f"pb_fabrication_{proj_sel}")  # Changed to 0.0
+        ti_pb = st.number_input("Transportation & Installation (T&I)", 0.0, 100.0, 0.0, 1.0, key=f"pb_ti_{proj_sel}")  # Changed to 0.0
 
-        eprr_pb = {"Engineering": eng_pb, "Preparation": prep_pb, "Removal": remv_pb, "Remediation": remd_pb}
+        eprr_pb = {"Engineering": eng_pb, "Procurement": procurement_pb, "Fabrication/Construction": fabrication_pb, "Transportation & Installation": ti_pb}
         eprr_total_pb = sum(eprr_pb.values())
-        st.caption(f"EPRR total: **{eprr_total_pb:.2f}%**")
-        apply_norm_pb = st.checkbox("Normalize to 100% for this component", value=False, key=f"pb_norm_{proj_sel}")
-        if apply_norm_pb and eprr_total_pb > 0 and abs(eprr_total_pb - 100.0) > 1e-6:
-            eprr_pb, _ = normalize_to_100(eprr_pb)
+        st.caption(f"WBS total: **{eprr_total_pb:.2f}%**")
 
     with cp2:
-        st.markdown("Financial (%) — use +/-")
+        st.markdown("use +/-")
         sst_pb = st.number_input("SST", 0.0, 100.0, 0.0, 0.5, key=f"pb_sst_{proj_sel}")
         owners_pb = st.number_input("Owner's Cost", 0.0, 100.0, 0.0, 0.5, key=f"pb_owners_{proj_sel}")
         cont_pb = st.number_input("Contingency", 0.0, 100.0, 0.0, 0.5, key=f"pb_cont_{proj_sel}")
@@ -1964,7 +1727,7 @@ with tab_pb:
                 "dataset": dataset_for_comp,
                 "model_used": best_name_c,
                 "inputs": {k: comp_payload.get(k, np.nan) for k in feat_cols_c},
-                "feature_cols": list(feat_cols_c),
+                "feature_cols": list(feat_cols_c),  # needed for MC
                 "prediction": base_pred,
                 "breakdown": {
                     "eprr_costs": eprr_costs,
@@ -1974,7 +1737,7 @@ with tab_pb:
                     "contingency_cost": contingency_cost,
                     "escalation_cost": escalation_cost,
                     "grand_total": grand_total,
-                    "target_col": y_name_c,
+                    "target_col": y_name_c,  # last col
                     "sst_pct": float(sst_pb),
                     "owners_pct": float(owners_pb),
                     "cont_pct": float(cont_pb),
@@ -1985,18 +1748,6 @@ with tab_pb:
             st.session_state.projects[proj_sel]["components"].append(comp_entry)
             st.session_state.component_labels[dataset_for_comp] = component_type or default_label
             st.session_state.projects[proj_sel]["currency"] = curr_ds
-            
-            # Log component addition
-            log_audit_event(
-                event_type='component_added',
-                details={
-                    'project': proj_sel,
-                    'component_type': component_type,
-                    'dataset': dataset_for_comp,
-                    'prediction': base_pred,
-                    'grand_total': grand_total
-                }
-            )
 
             st.session_state.widget_nonce += 1
             toast(f"Component added to project '{proj_sel}'.")
@@ -2075,51 +1826,24 @@ with tab_pb:
     col_dl1, col_dl2, col_dl3 = st.columns(3)
 
     with col_dl1:
-        # Create Excel report
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            summary_df = project_components_df(proj)
-            if not summary_df.empty:
-                summary_df.to_excel(writer, sheet_name="Summary", index=False)
-            else:
-                pd.DataFrame({"Info": [f"No components for project {proj_sel}"]}).to_excel(
-                    writer, sheet_name="Summary", index=False
-                )
-        output.seek(0)
-        
+        excel_report = create_project_excel_report_capex(proj_sel, proj, curr)
         st.download_button(
             "⬇️ Download Project Excel",
-            data=output,
+            data=excel_report,
             file_name=f"{proj_sel}_CAPEX_Report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key=f"pb_dl_excel_{proj_sel}",
         )
 
     with col_dl2:
-        # Create PPT report if available
-        if PPTX_AVAILABLE:
-            prs = Presentation()
-            prs.slide_width = Inches(10)
-            prs.slide_height = Inches(7.5)
-            layout_title_only = prs.slide_layouts[5]
-            
-            slide = prs.slides.add_slide(layout_title_only)
-            title = slide.shapes.title
-            title.text = f"CAPEX Project Report\n{proj_sel}"
-            
-            ppt_output = io.BytesIO()
-            prs.save(ppt_output)
-            ppt_output.seek(0)
-            
-            st.download_button(
-                "⬇️ Download Project PowerPoint",
-                data=ppt_output,
-                file_name=f"{proj_sel}_CAPEX_Report.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                key=f"pb_dl_ppt_{proj_sel}",
-            )
-        else:
-            st.info("PowerPoint export requires python-pptx")
+        pptx_report = create_project_pptx_report_capex(proj_sel, proj, curr)
+        st.download_button(
+            "⬇️ Download Project PowerPoint",
+            data=pptx_report,
+            file_name=f"{proj_sel}_CAPEX_Report.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            key=f"pb_dl_ppt_{proj_sel}",
+        )
 
     with col_dl3:
         st.download_button(
@@ -2136,23 +1860,17 @@ with tab_pb:
             data = json.load(up_json)
             st.session_state.projects[proj_sel] = data
             st.session_state.widget_nonce += 1
-            
-            # Log import event
-            log_audit_event(
-                event_type='project_imported',
-                details={'project': proj_sel, 'source': 'json_upload'}
-            )
-            
             toast("Project imported successfully.")
             st.rerun()
         except Exception as e:
             st.error(f"Failed to import project JSON: {e}")
 
+
 # =======================================================================================
-# 🎲 MONTE CARLO TAB
+# 🎲 MONTE CARLO TAB (Curve + TRUE Fan + Tornado + Exports)
 # =======================================================================================
 with tab_mc:
-    st.markdown('<h3 style="margin-top:0;color:#000;">🎲 Monte Carlo Simulation</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0;color:#000;">🎲 Monte Carlo</h3>', unsafe_allow_html=True)
     st.caption("Simulate uncertainty per component and roll-up to project Grand Total distribution.")
 
     if not st.session_state.projects:
@@ -2186,7 +1904,7 @@ with tab_mc:
         mc_feat_sigma = st.slider("Feature uncertainty (±% stdev)", 0.0, 30.0, 5.0, 0.5, key=f"mc_feat_{proj_sel_mc}")
         mc_pct_sigma = st.slider("Percent uncertainty (± abs stdev)", 0.0, 10.0, 1.0, 0.1, key=f"mc_pct_{proj_sel_mc}")
     with mcC:
-        mc_norm_eprr = st.checkbox("Normalize EPRR to 100% each simulation", False, key=f"mc_norm_{proj_sel_mc}")
+        mc_norm_eprr = st.checkbox("Normalize WBS to 100% each simulation", False, key=f"mc_norm_{proj_sel_mc}")
         mc_budget = st.number_input(
             "Budget threshold (Project Grand Total)",
             min_value=0.0,
@@ -2285,32 +2003,14 @@ with tab_mc:
 
                 df_comp_mc = pd.DataFrame(comp_summ_rows)
 
-                # Store results in session state
-                st.session_state.mc_results[f"{proj_sel_mc}_mc"] = df_proj_mc
-                st.session_state.mc_results[f"{proj_sel_mc}_comp"] = df_comp_mc
-                st.session_state.mc_results[f"{proj_sel_mc}_series"] = comp_series
-                
-                # Log Monte Carlo run
-                log_audit_event(
-                    event_type='monte_carlo_run',
-                    details={
-                        'project': proj_sel_mc,
-                        'simulations': n,
-                        'baseline': baseline_gt,
-                        'p50': p50,
-                        'p90': p90,
-                        'exceedance_probability': exceed_prob
-                    }
-                )
-
                 # -------------------------
-                # Curve data (CDF + Exceedance)
+                # Curve data (CDF only - no exceedance)
                 # -------------------------
                 df_curve = df_proj_mc[["project_grand_total"]].sort_values("project_grand_total").reset_index(drop=True)
                 n_curve = len(df_curve)
                 df_curve["cdf"] = np.arange(1, n_curve + 1) / n_curve
                 df_curve["exceed"] = 1.0 - df_curve["cdf"]
-                df_curve = df_curve.rename(columns={"project_grand_total": "x"})
+                df_curve = df_curve.rename(columns={"project_grand_total": "x"})  # consistent
 
                 # -------------------------
                 # TRUE Fan data (probability axis)
@@ -2361,20 +2061,14 @@ with tab_mc:
             m3.metric("P90 Project Grand Total", f"{curr} {p90:,.2f}")
             m4.metric("P(> Budget)", f"{exceed_prob:.1f}%")
 
-            # BUDGET RISK ALERT
-            if exceed_prob > 50:
-                st.markdown(f'<div class="alert-banner">🚨 WARNING: {exceed_prob:.1f}% probability of exceeding budget!</div>', unsafe_allow_html=True)
-                st.info(f"**Recommendation**: Consider increasing contingency by approximately {exceed_prob/10:.1f}% to reduce exceedance probability.")
-
             # Histogram
             fig_hist = px.histogram(df_proj_mc, x="project_grand_total", nbins=60, title="Project Grand Total distribution")
             st.plotly_chart(fig_hist, use_container_width=True)
 
-            # CDF + Exceedance curve + budget marker
+            # CDF curve only (no exceedance) + budget marker
             fig_curve = go.Figure()
             fig_curve.add_trace(go.Scatter(x=df_curve["x"], y=df_curve["cdf"], mode="lines", name="CDF (P ≤ X)", line=dict(width=3)))
-            fig_curve.add_trace(go.Scatter(x=df_curve["x"], y=df_curve["exceed"], mode="lines", name="Exceedance (P > X)",
-                                           line=dict(width=3, dash="dash")))
+            # Removed exceedance line
 
             for val, label in [(p50, "P50"), (p80, "P80"), (p90, "P90")]:
                 fig_curve.add_vline(x=val, line_width=2, line_dash="dot", annotation_text=label, annotation_position="top")
@@ -2388,7 +2082,7 @@ with tab_mc:
             )
 
             fig_curve.update_layout(
-                title="Monte Carlo Cost Curve (CDF & Exceedance)",
+                title="Monte Carlo Cost Curve (CDF)",
                 xaxis_title=f"Project Grand Total ({curr})",
                 yaxis_title="Probability",
                 yaxis=dict(tickformat=".0%"),
@@ -2398,7 +2092,6 @@ with tab_mc:
             st.plotly_chart(fig_curve, use_container_width=True)
 
             # TRUE Fan chart (Project) — probability axis
-            st.markdown("### 📊 TRUE Fan Chart (Confidence → Cost)")
             fig_fan = go.Figure()
 
             # P10–P90 band
@@ -2441,57 +2134,55 @@ with tab_mc:
             st.plotly_chart(fig_fan, use_container_width=True)
 
             # Scenario buckets
-            st.markdown("### 📊 Scenario Buckets")
             bucket_counts = df_proj_mc["Scenario"].value_counts().reset_index()
             bucket_counts.columns = ["Scenario", "Count"]
             fig_bucket = px.bar(bucket_counts, x="Scenario", y="Count", title="Scenario bucket counts")
             st.plotly_chart(fig_bucket, use_container_width=True)
 
             # Component summary
-            st.markdown("### 📋 Component summary (P50/P80/P90)")
+            st.markdown("### Component summary (P50/P80/P90)")
             st.dataframe(
                 df_comp_mc.style.format({"P50": "{:,.2f}", "P80": "{:,.2f}", "P90": "{:,.2f}"}),
                 use_container_width=True,
             )
 
-            # Component-level TRUE Fan charts
-            st.markdown("### 📊 Component TRUE Fan Charts")
-            if comp_series:
-                comp_pick = st.selectbox("Select component for detailed analysis", list(comp_series.keys()), key=f"mc_comp_pick_{proj_sel_mc}")
+            # TRUE Fan chart (Component)
+            st.markdown("### TRUE Fan Chart (Component)")
+            comp_pick = st.selectbox("Select component", list(df_comp_sims.columns), key=f"mc_comp_pick_{proj_sel_mc}")
 
-                vals_c = pd.Series(comp_series[comp_pick])
-                df_fan_c = pd.DataFrame({
-                    "prob": p_grid * 100.0,
-                    "p10": np.full_like(p_grid, float(vals_c.quantile(0.10))),
-                    "p20": np.full_like(p_grid, float(vals_c.quantile(0.20))),
-                    "p40": np.full_like(p_grid, float(vals_c.quantile(0.40))),
-                    "p50": np.full_like(p_grid, float(vals_c.quantile(0.50))),
-                    "p60": np.full_like(p_grid, float(vals_c.quantile(0.60))),
-                    "p80": np.full_like(p_grid, float(vals_c.quantile(0.80))),
-                    "p90": np.full_like(p_grid, float(vals_c.quantile(0.90))),
-                })
+            vals_c = pd.Series(df_comp_sims[comp_pick].to_numpy(dtype=float))
+            df_fan_c = pd.DataFrame({
+                "prob": p_grid * 100.0,
+                "p10": np.full_like(p_grid, float(vals_c.quantile(0.10))),
+                "p20": np.full_like(p_grid, float(vals_c.quantile(0.20))),
+                "p40": np.full_like(p_grid, float(vals_c.quantile(0.40))),
+                "p50": np.full_like(p_grid, float(vals_c.quantile(0.50))),
+                "p60": np.full_like(p_grid, float(vals_c.quantile(0.60))),
+                "p80": np.full_like(p_grid, float(vals_c.quantile(0.80))),
+                "p90": np.full_like(p_grid, float(vals_c.quantile(0.90))),
+            })
 
-                fig_fan_c = go.Figure()
-                fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p90"], mode="lines", line=dict(width=0), showlegend=False))
-                fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p10"], fill="tonexty", mode="lines",
-                                               fillcolor="rgba(0,161,155,0.20)", name="P10–P90"))
-                fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p80"], mode="lines", line=dict(width=0), showlegend=False))
-                fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p20"], fill="tonexty", mode="lines",
-                                               fillcolor="rgba(108,77,211,0.25)", name="P20–P80"))
-                fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p60"], mode="lines", line=dict(width=0), showlegend=False))
-                fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p40"], fill="tonexty", mode="lines",
-                                               fillcolor="rgba(0,0,0,0.20)", name="P40–P60"))
-                fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p50"], mode="lines", line=dict(width=3), name="P50"))
-                fig_fan_c.update_layout(
-                    title=f"TRUE Fan — Component: {comp_pick}",
-                    xaxis_title="Confidence Level (%)",
-                    yaxis_title=f"Cost ({curr})",
-                    height=460,
-                )
-                st.plotly_chart(fig_fan_c, use_container_width=True)
+            fig_fan_c = go.Figure()
+            fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p90"], mode="lines", line=dict(width=0), showlegend=False))
+            fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p10"], fill="tonexty", mode="lines",
+                                           fillcolor="rgba(0,161,155,0.20)", name="P10–P90"))
+            fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p80"], mode="lines", line=dict(width=0), showlegend=False))
+            fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p20"], fill="tonexty", mode="lines",
+                                           fillcolor="rgba(108,77,211,0.25)", name="P20–P80"))
+            fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p60"], mode="lines", line=dict(width=0), showlegend=False))
+            fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p40"], fill="tonexty", mode="lines",
+                                           fillcolor="rgba(0,0,0,0.20)", name="P40–P60"))
+            fig_fan_c.add_trace(go.Scatter(x=df_fan_c["prob"], y=df_fan_c["p50"], mode="lines", line=dict(width=3), name="P50"))
+            fig_fan_c.update_layout(
+                title=f"TRUE Fan — Component: {comp_pick}",
+                xaxis_title="Confidence Level (%)",
+                yaxis_title=f"Cost ({curr})",
+                height=460,
+            )
+            st.plotly_chart(fig_fan_c, use_container_width=True)
 
             # Tornado
-            st.markdown("### 📊 Sensitivity Tornado (Variance Contribution)")
+            st.markdown("### Sensitivity Tornado (Variance Contribution)")
             fig_tornado = px.bar(
                 df_tornado,
                 x="variance_share_pct",
@@ -2520,8 +2211,8 @@ with tab_mc:
             with st.expander("Show Monte Carlo table (first 200 rows)", expanded=False):
                 st.dataframe(df_proj_mc.head(200), use_container_width=True)
 
-            # Downloads
-            st.markdown("### 📥 Download Monte Carlo results")
+            # Downloads (CSV + ZIP)
+            st.markdown("### Download Monte Carlo results")
             csv_proj = df_proj_mc.to_csv(index=False).encode("utf-8")
             csv_comp = df_comp_mc.to_csv(index=False).encode("utf-8")
 
@@ -2547,7 +2238,6 @@ with tab_mc:
             with pd.ExcelWriter(bio_xlsx, engine="openpyxl") as writer:
                 df_proj_mc.to_excel(writer, sheet_name="Project_MC", index=False)
                 df_comp_mc.to_excel(writer, sheet_name="Component_Summary", index=False)
-                df_tornado.to_excel(writer, sheet_name="Sensitivity_Tornado", index=False)
             bio_xlsx.seek(0)
 
             zip_bio = io.BytesIO()
@@ -2566,14 +2256,57 @@ with tab_mc:
                     key=f"mc_dl_zip_{proj_sel_mc}",
                 )
 
+            # Excel + PPT report exports (true fan + tornado + sims)
+            st.markdown("### Download Monte Carlo reports (Excel / PPT)")
+            mc_excel = create_monte_carlo_excel_report(
+                project_name=proj_sel_mc,
+                df_proj_mc=df_proj_mc.rename(columns={"project_grand_total": "Project Grand Total"}),
+                df_curve=df_curve,
+                df_fan_true=df_fan_true,
+                df_tornado=df_tornado,
+                df_comp_sims=df_comp_sims,
+            )
+            mc_ppt = create_monte_carlo_pptx_report(
+                project_name=proj_sel_mc,
+                currency=curr,
+                baseline_gt=float(baseline_gt),
+                budget=float(mc_budget),
+                p50=float(p50),
+                p80=float(p80),
+                p90=float(p90),
+                exceed_prob_pct=float(exceed_prob),
+                df_curve=df_curve,
+                df_fan_true=df_fan_true,
+                df_tornado=df_tornado,
+            )
+
+            r1, r2 = st.columns(2)
+            with r1:
+                st.download_button(
+                    "⬇️ Download MC Excel (Curve+Fan+Tornado+Sims)",
+                    data=mc_excel,
+                    file_name=f"{proj_sel_mc}_MonteCarlo_Report.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"mc_dl_excel_{proj_sel_mc}",
+                )
+            with r2:
+                st.download_button(
+                    "⬇️ Download MC PowerPoint (Curve+Fan+Tornado)",
+                    data=mc_ppt,
+                    file_name=f"{proj_sel_mc}_MonteCarlo_Report.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    key=f"mc_dl_ppt_{proj_sel_mc}",
+                )
+
         except Exception as e:
             st.error(f"Monte Carlo failed: {e}")
 
+
 # =======================================================================================
-# COMPARE PROJECTS TAB (WITH ENHANCED ANALYTICS)
+# COMPARE PROJECTS TAB
 # =======================================================================================
 with tab_compare:
-    st.markdown('<h4 style="margin-top:0;color:#000;">🔀 Compare Projects & Portfolio Analytics</h4><p>Portfolio-level CAPEX view with risk metrics</p>', unsafe_allow_html=True)
+    st.markdown('<h4 style="margin:0;color:#000;">Compare Projects</h4><p>Portfolio-level CAPEX view</p>', unsafe_allow_html=True)
 
     proj_names = list(st.session_state.projects.keys())
     if len(proj_names) < 2:
@@ -2591,8 +2324,6 @@ with tab_compare:
         st.warning("Select at least two projects for a meaningful comparison.")
         st.stop()
 
-    # BASIC PROJECT COMPARISON
-    st.markdown("### 📊 Basic Project Comparison")
     rows = []
     for p in compare_sel:
         proj = st.session_state.projects[p]
@@ -2620,12 +2351,12 @@ with tab_compare:
         use_container_width=True,
     )
 
-    st.markdown("#### 📈 Grand Total by Project")
+    st.markdown("#### Grand Total by Project")
     fig_gt = px.bar(df_proj, x="Project", y="Grand Total", text="Grand Total", barmode="group")
     fig_gt.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
     st.plotly_chart(fig_gt, use_container_width=True)
 
-    st.markdown("#### 📊 Stacked Cost Composition by Project")
+    st.markdown("#### Stacked Cost Composition by Project")
     df_melt = df_proj.melt(
         id_vars=["Project"],
         value_vars=["CAPEX Sum", "Owner", "Contingency", "Escalation", "SST"],
@@ -2635,309 +2366,7 @@ with tab_compare:
     fig_comp = px.bar(df_melt, x="Project", y="Value", color="Cost Type", barmode="stack")
     st.plotly_chart(fig_comp, use_container_width=True)
 
-    # PORTFOLIO RISK ANALYTICS
-    st.divider()
-    st.markdown("### 📈 Portfolio Risk Analytics")
-    
-    with st.expander("📊 Portfolio Risk Dashboard", expanded=True):
-        # Calculate portfolio statistics
-        portfolio_df = calculate_portfolio_metrics({p: st.session_state.projects[p] for p in compare_sel})
-        
-        # Display portfolio heatmap
-        st.markdown("#### 🎯 Portfolio Risk Heatmap")
-        
-        # Create risk matrix
-        risk_matrix = portfolio_df.pivot_table(
-            values='Exceedance Probability %',
-            columns='Risk Level',
-            aggfunc='count',
-            fill_value=0
-        )
-        
-        if not risk_matrix.empty:
-            fig_heatmap = px.imshow(
-                risk_matrix.T,
-                text_auto=True,
-                aspect="auto",
-                color_continuous_scale="RdYlGn_r",
-                title="Project Risk Distribution"
-            )
-            st.plotly_chart(fig_heatmap, use_container_width=True)
-        
-        # Portfolio aggregation
-        st.markdown("#### 📊 Aggregated Portfolio Metrics")
-        
-        total_base = portfolio_df['Base Estimate'].sum()
-        total_p10 = portfolio_df['P10'].sum()
-        total_p90 = portfolio_df['P90'].sum()
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Portfolio Value", f"{curr} {total_base:,.2f}")
-        with col2:
-            st.metric("Portfolio P10", f"{curr} {total_p10:,.2f}")
-        with col3:
-            st.metric("Portfolio P90", f"{curr} {total_p90:,.2f}")
-        with col4:
-            risk_premium = (total_p90 - total_p10) / total_base * 100 if total_base > 0 else 0
-            st.metric("Risk Premium %", f"{risk_premium:.1f}%")
-
-    # BUDGET RISK ALERTS
-    with st.expander("🚨 Budget Risk Alerts", expanded=True):
-        st.markdown("**Monitor and manage budget exceedance risks**")
-        
-        budget_threshold = st.slider(
-            "Set risk alert threshold (%)",
-            min_value=0,
-            max_value=100,
-            value=50,
-            help="Alert when P(>Budget) exceeds this percentage"
-        )
-        
-        # Check each project for budget risk
-        high_risk_projects = []
-        for p in compare_sel:
-            proj = st.session_state.projects[p]
-            t = project_totals(proj)
-            
-            # Check if Monte Carlo results exist
-            mc_key = f"{p}_mc"
-            if mc_key in st.session_state.mc_results:
-                mc_data = st.session_state.mc_results[mc_key]
-                if 'project_grand_total' in mc_data.columns:
-                    exceed_prob = (mc_data['project_grand_total'] > t['grand_total']).mean() * 100
-                else:
-                    exceed_prob = 50.0
-            else:
-                exceed_prob = 50.0
-            
-            if exceed_prob > budget_threshold:
-                high_risk_projects.append({
-                    'Project': p,
-                    'Current Budget': t['grand_total'],
-                    'Exceedance Probability': f"{exceed_prob:.1f}%",
-                    'Risk Level': 'High' if exceed_prob > 70 else 'Medium',
-                    'Action': 'Increase contingency or re-scope'
-                })
-        
-        if high_risk_projects:
-            st.markdown(f'<div class="alert-banner">🚨 WARNING: {len(high_risk_projects)} projects exceed {budget_threshold}% budget risk threshold!</div>', unsafe_allow_html=True)
-            
-            risk_df = pd.DataFrame(high_risk_projects)
-            
-            # Apply CSS styling based on risk level
-            def color_risk(val):
-                if 'High' in str(val):
-                    return 'background-color: #ffcccc'
-                elif 'Medium' in str(val):
-                    return 'background-color: #fff4cc'
-                else:
-                    return ''
-            
-            st.dataframe(risk_df.style.applymap(color_risk, subset=['Risk Level']), use_container_width=True)
-            
-            # Contingency adjustment calculator
-            st.markdown("### 🛠️ Contingency Adjustment Calculator")
-            
-            selected_project = st.selectbox(
-                "Select project to adjust",
-                [p['Project'] for p in high_risk_projects],
-                key="risk_project_select"
-            )
-            
-            current_cont_pct = st.number_input(
-                "Current Contingency %",
-                min_value=0.0,
-                max_value=100.0,
-                value=10.0,
-                step=1.0,
-                key="current_cont_pct"
-            )
-            
-            target_risk = st.slider(
-                "Target Exceedance Probability %",
-                min_value=0.0,
-                max_value=100.0,
-                value=30.0,
-                step=5.0,
-                key="target_risk"
-            )
-            
-            # Simple heuristic for contingency adjustment
-            current_risk = next(p['Exceedance Probability'] for p in high_risk_projects 
-                              if p['Project'] == selected_project)
-            current_risk_value = float(current_risk.replace('%', ''))
-            
-            risk_reduction_needed = current_risk_value - target_risk
-            additional_cont_pct = max(0, risk_reduction_needed * 0.5)  # Heuristic
-            
-            st.info(f"""
-            **Recommendation for {selected_project}:**
-            
-            - Current contingency: {current_cont_pct:.1f}%
-            - Additional contingency needed: {additional_cont_pct:.1f}%
-            - New total contingency: {current_cont_pct + additional_cont_pct:.1f}%
-            - Expected risk reduction: {risk_reduction_needed:.1f}%
-            - New exceedance probability: ~{target_risk:.1f}%
-            """)
-        else:
-            st.success(f"✅ All projects are within acceptable risk limits ({budget_threshold}% threshold)")
-
-    # HISTORICAL BENCHMARKING
-    st.divider()
-    st.markdown("### 📚 Historical Benchmarking")
-    
-    with st.expander("📊 Compare Against Historical Projects", expanded=False):
-        st.markdown("**Sanity check current estimates against historical data**")
-        
-        # Historical data upload
-        hist_data = st.file_uploader(
-            "Upload historical projects dataset (CSV)",
-            type="csv",
-            key="hist_upload"
-        )
-        
-        if hist_data is not None:
-            df_hist = pd.read_csv(hist_data)
-            
-            # Auto-detect relevant columns
-            cost_cols = [c for c in df_hist.columns if any(x in c.lower() for x in ['cost', 'price', 'value', 'amount'])]
-            date_cols = [c for c in df_hist.columns if any(x in c.lower() for x in ['date', 'year', 'month'])]
-            
-            if cost_cols:
-                selected_cost_col = st.selectbox("Select cost column", cost_cols, key="hist_cost_col")
-                selected_date_col = st.selectbox("Select date column", ['None'] + date_cols, key="hist_date_col") if date_cols else 'None'
-                
-                # Calculate historical statistics
-                hist_stats = {
-                    'Mean': df_hist[selected_cost_col].mean(),
-                    'Median': df_hist[selected_cost_col].median(),
-                    'P10': df_hist[selected_cost_col].quantile(0.1),
-                    'P90': df_hist[selected_cost_col].quantile(0.9),
-                    'Std Dev': df_hist[selected_cost_col].std(),
-                    'Count': len(df_hist)
-                }
-                
-                # Compare current projects
-                comparison_data = []
-                for p in compare_sel:
-                    proj = st.session_state.projects[p]
-                    t = project_totals(proj)
-                    
-                    # Calculate percentiles relative to historical
-                    hist_percentile = stats.percentileofscore(
-                        df_hist[selected_cost_col].dropna(),
-                        t['grand_total']
-                    )
-                    
-                    z_score = (t['grand_total'] - hist_stats['Mean']) / hist_stats['Std Dev'] \
-                             if hist_stats['Std Dev'] > 0 else 0
-                    
-                    comparison_data.append({
-                        'Project': p,
-                        'Estimate': t['grand_total'],
-                        'Historical Percentile': hist_percentile,
-                        'Z-Score': z_score,
-                        'Vs Historical Mean': f"{(t['grand_total'] - hist_stats['Mean'])/hist_stats['Mean']*100:.1f}%" \
-                                            if hist_stats['Mean'] > 0 else "N/A",
-                        'Benchmark': 'Above' if hist_percentile > 75 else 'Below' if hist_percentile < 25 else 'Typical'
-                    })
-                
-                comparison_df = pd.DataFrame(comparison_data)
-                
-                # Visual comparison
-                st.markdown("#### 📈 Historical Comparison")
-                
-                fig_benchmark = go.Figure()
-                
-                # Add historical distribution
-                fig_benchmark.add_trace(go.Box(
-                    y=df_hist[selected_cost_col],
-                    name='Historical Projects',
-                    boxpoints='outliers',
-                    jitter=0.3,
-                    pointpos=-1.8,
-                    marker_color=PETRONAS['teal']
-                ))
-                
-                # Add current projects
-                for _, row in comparison_df.iterrows():
-                    fig_benchmark.add_trace(go.Scatter(
-                        x=['Historical Projects'],
-                        y=[row['Estimate']],
-                        mode='markers',
-                        name=row['Project'],
-                        marker=dict(
-                            size=15,
-                            color='red' if row['Benchmark'] == 'Above' else \
-                                  'green' if row['Benchmark'] == 'Below' else 'orange',
-                            symbol='diamond'
-                        ),
-                        text=f"{row['Project']}: {row['Estimate']:,.0f} ({row['Historical Percentile']:.0f}%)",
-                        hoverinfo='text'
-                    ))
-                
-                fig_benchmark.update_layout(
-                    title='Current Projects vs Historical Benchmark',
-                    yaxis_title='Cost',
-                    showlegend=True,
-                    height=500
-                )
-                
-                st.plotly_chart(fig_benchmark, use_container_width=True)
-                
-                # Detailed comparison table
-                st.markdown("#### 📋 Benchmarking Results")
-                st.dataframe(
-                    comparison_df.style.format({
-                        'Estimate': '{:,.2f}',
-                        'Historical Percentile': '{:.1f}',
-                        'Z-Score': '{:.2f}'
-                    }).apply(
-                        lambda x: ['background-color: #ffcccc' if v == 'Above' else 
-                                  'background-color: #ccffcc' if v == 'Below' else '' 
-                                  for v in x] if x.name == 'Benchmark' else [''] * len(x),
-                        axis=0
-                    ),
-                    use_container_width=True
-                )
-                
-                # Historical trends over time
-                if selected_date_col != 'None' and selected_date_col in df_hist.columns:
-                    try:
-                        df_hist['Year'] = pd.to_datetime(df_hist[selected_date_col]).dt.year
-                        yearly_stats = df_hist.groupby('Year')[selected_cost_col].agg(['mean', 'median', 'std', 'count'])
-                        
-                        fig_trend = px.line(
-                            yearly_stats.reset_index(),
-                            x='Year',
-                            y='mean',
-                            error_y='std',
-                            title='Historical Cost Trends (Mean ± Std Dev)',
-                            markers=True
-                        )
-                        
-                        # Add current projects
-                        for _, row in comparison_df.iterrows():
-                            fig_trend.add_trace(go.Scatter(
-                                x=[yearly_stats.index.max() + 1],
-                                y=[row['Estimate']],
-                                mode='markers',
-                                name=row['Project'],
-                                marker=dict(size=12, symbol='star')
-                            ))
-                        
-                        st.plotly_chart(fig_trend, use_container_width=True)
-                    except Exception as e:
-                        st.warning(f"Could not parse date column: {e}")
-            else:
-                st.warning("No cost-related columns found in the historical dataset")
-        else:
-            st.info("Upload a CSV file with historical project data to enable benchmarking")
-
-    # COMPONENT-LEVEL DETAILS
-    st.divider()
-    st.markdown("### 🔍 Component-Level Details")
+    st.markdown("#### Component-Level Details")
     for p in compare_sel:
         proj = st.session_state.projects[p]
         comps = proj.get("components", [])
@@ -2977,218 +2406,29 @@ with tab_compare:
                 use_container_width=True,
             )
 
-    # EXPORT COMPARISON REPORTS
-    st.divider()
-    st.markdown("### 📥 Download Comparison Reports")
+    st.markdown("---")
+    st.markdown("#### Download Comparison Reports")
 
     col_c1, col_c2 = st.columns(2)
     projects_to_export = {name: st.session_state.projects[name] for name in compare_sel}
     currency_comp = st.session_state.projects[compare_sel[0]].get("currency", "")
 
     with col_c1:
-        # Create comparison Excel report
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            # Summary sheet
-            summary_rows = []
-            for name, proj in projects_to_export.items():
-                t = project_totals(proj)
-                summary_rows.append(
-                    {
-                        "Project": name,
-                        "Components": len(proj.get("components", [])),
-                        "CAPEX Sum": t["capex_sum"],
-                        "Owner": t["owners"],
-                        "Contingency": t["cont"],
-                        "Escalation": t["esc"],
-                        "SST": t["sst"],
-                        "Grand Total": t["grand_total"],
-                    }
-                )
-            
-            summary_df = pd.DataFrame(summary_rows)
-            summary_df.to_excel(writer, sheet_name="Projects Summary", index=False)
-            
-            # Add portfolio metrics if available
-            if 'portfolio_df' in locals():
-                portfolio_df.to_excel(writer, sheet_name="Portfolio Metrics", index=False)
-            
-            # Add component details for each project
-            for name, proj in projects_to_export.items():
-                dfc = project_components_df(proj)
-                if not dfc.empty:
-                    sheet_name = name[:31]  # Excel sheet name limit
-                    dfc.to_excel(writer, sheet_name=sheet_name, index=False)
-        
-        output.seek(0)
-        
+        excel_comp = create_comparison_excel_report_capex(projects_to_export, currency_comp)
         st.download_button(
             "⬇️ Download Comparison Excel",
-            data=output,
+            data=excel_comp,
             file_name="CAPEX_Projects_Comparison.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="cmp_dl_excel",
         )
 
     with col_c2:
-        # Create comparison PPT report if available
-        if PPTX_AVAILABLE:
-            prs = Presentation()
-            prs.slide_width = Inches(10)
-            prs.slide_height = Inches(7.5)
-            layout_title_only = prs.slide_layouts[5]
-            
-            slide = prs.slides.add_slide(layout_title_only)
-            title = slide.shapes.title
-            title.text = "CAPEX Project Comparison"
-            
-            ppt_output = io.BytesIO()
-            prs.save(ppt_output)
-            ppt_output.seek(0)
-            
-            st.download_button(
-                "⬇️ Download Comparison PowerPoint",
-                data=ppt_output,
-                file_name="CAPEX_Projects_Comparison.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                key="cmp_dl_ppt",
-            )
-        else:
-            st.info("PowerPoint export requires python-pptx")
-
-# =======================================================================================
-# AUDIT TRAIL TAB
-# =======================================================================================
-with tab_audit:
-    st.markdown('<h3 style="margin-top:0;color:#000;">📋 Audit Trail & Compliance Log</h3>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown("**All prediction activities and model changes are logged for compliance**")
-    with col2:
-        if st.button("📥 Export Audit Log", key="export_audit"):
-            if st.session_state.audit_log:
-                audit_df = pd.DataFrame(st.session_state.audit_log)
-                csv = audit_df.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"audit_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                    key="download_audit"
-                )
-    
-    # Filter options
-    st.markdown("### 🔍 Filter Log Entries")
-    col_f1, col_f2, col_f3 = st.columns(3)
-    
-    with col_f1:
-        event_types = list(set([entry.get('event_type', 'unknown') for entry in st.session_state.audit_log]))
-        event_filter = st.multiselect(
-            "Event Type",
-            options=['all'] + sorted(event_types),
-            default=['all']
+        pptx_comp = create_comparison_pptx_report_capex(projects_to_export, currency_comp)
+        st.download_button(
+            "⬇️ Download Comparison PowerPoint",
+            data=pptx_comp,
+            file_name="CAPEX_Projects_Comparison.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            key="cmp_dl_ppt",
         )
-    
-    with col_f2:
-        try:
-            if st.session_state.audit_log:
-                min_date = min([pd.to_datetime(entry['timestamp']).date() for entry in st.session_state.audit_log])
-                max_date = max([pd.to_datetime(entry['timestamp']).date() for entry in st.session_state.audit_log])
-                date_range = st.date_input(
-                    "Date Range",
-                    value=(max_date - datetime.timedelta(days=7), max_date),
-                    min_value=min_date,
-                    max_value=max_date
-                )
-            else:
-                date_range = (datetime.date.today() - datetime.timedelta(days=7), datetime.date.today())
-        except:
-            date_range = (datetime.date.today() - datetime.timedelta(days=7), datetime.date.today())
-    
-    with col_f3:
-        search_term = st.text_input("Search in details")
-    
-    # Display audit log
-    st.markdown("### 📜 Audit Log Entries")
-    
-    if st.session_state.audit_log:
-        # Convert to DataFrame for filtering
-        audit_df = pd.DataFrame(st.session_state.audit_log)
-        audit_df['timestamp'] = pd.to_datetime(audit_df['timestamp'])
-        
-        # Apply filters
-        if 'all' not in event_filter:
-            audit_df = audit_df[audit_df['event_type'].isin(event_filter)]
-        
-        if len(date_range) == 2:
-            start_date, end_date = date_range
-            audit_df = audit_df[
-                (audit_df['timestamp'].dt.date >= start_date) & 
-                (audit_df['timestamp'].dt.date <= end_date)
-            ]
-        
-        if search_term:
-            audit_df = audit_df[
-                audit_df['details'].astype(str).str.contains(search_term, case=False) |
-                audit_df['event_type'].astype(str).str.contains(search_term, case=False) |
-                audit_df['user'].astype(str).str.contains(search_term, case=False)
-            ]
-        
-        # Display
-        for _, row in audit_df.sort_values('timestamp', ascending=False).head(100).iterrows():
-            # Determine color based on event type
-            color_map = {
-                'prediction': '#e6f7ff',
-                'model_training': '#f0fff4',
-                'project_created': '#fff7e6',
-                'export': '#f9f0ff',
-                'import': '#fff0f6',
-                'monte_carlo_run': '#f0f9ff',
-                'data_upload': '#f6ffed',
-                'data_load': '#f0f5ff'
-            }
-            
-            bg_color = color_map.get(row['event_type'], '#ffffff')
-            
-            with st.expander(f"📅 {row['timestamp']} - **{row['event_type'].upper()}** - 👤 {row.get('user', 'N/A')}", expanded=False):
-                st.markdown(f"**Event ID:** `{row.get('event_id', 'N/A')}`")
-                st.markdown(f"**Model Version:** {row.get('model_version', 'N/A')}")
-                st.markdown("**Details:**")
-                
-                details = row['details']
-                if isinstance(details, dict):
-                    for key, value in details.items():
-                        st.markdown(f"  - **{key}:** {value}")
-                else:
-                    st.write(details)
-    
-    else:
-        st.info("No audit entries yet. Activities will appear here automatically.")
-    
-    # Statistics
-    st.markdown("### 📊 Audit Statistics")
-    if st.session_state.audit_log:
-        stats_df = pd.DataFrame(st.session_state.audit_log)
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-        
-        with col_s1:
-            st.metric("Total Events", len(stats_df))
-        with col_s2:
-            st.metric("Unique Users", stats_df['user'].nunique())
-        with col_s3:
-            st.metric("Predictions", len(stats_df[stats_df['event_type'] == 'prediction']))
-        with col_s4:
-            recent_24h = len(stats_df[pd.to_datetime(stats_df['timestamp']) > 
-                                    datetime.datetime.now() - datetime.timedelta(hours=24)])
-            st.metric("Last 24h", recent_24h)
-        
-        # Event type distribution
-        if 'event_type' in stats_df.columns:
-            event_counts = stats_df['event_type'].value_counts()
-            fig_events = px.pie(
-                values=event_counts.values,
-                names=event_counts.index,
-                title='Event Type Distribution'
-            )
-            st.plotly_chart(fig_events, use_container_width=True)
